@@ -1,6 +1,21 @@
+-- @Author taakefyrsten
+-- https://next.nexusmods.com/profile/taakefyrsten
+-- https://github.com/jwlei/radial_queue
+
 -- INIT ------------------------------------
 local instance = nil
 local itemSuccess = nil
+local cancelCount = 0
+
+local sdk_GUI020008 = sdk.find_type_definition("app.GUI020008")
+local sdk_HunterExtendBase = sdk.find_type_definition("app.HunterCharacter.cHunterExtendBase")
+local sdk_PlayerManager = sdk.find_type_definition("app.PlayerManager")
+local sdk_cHunterBadCondidions = sdk.find_type_definition("app.HunterBadConditions.cHunterBadConditions")
+local sdk_Weapon = sdk.find_type_definition("app.Weapon")
+local sdk_PlayerUtil = sdk.find_type_definition("app.PlayerUtil")
+local sdk_cGUIShortcutPadControl = sdk.find_type_definition("app.cGUIShortcutPadControl")
+local sdk_HunterItemActionTable = sdk.find_type_definition("app.HunterItemActionTable")
+
 
 -- SETTINGS --------------------------------
 
@@ -33,7 +48,6 @@ end
 load_settings()
 
 
-
 -- Core functions ------------------------
 local function saveItem(args)
     instance = sdk.to_managed_object(args[2])
@@ -41,7 +55,6 @@ local function saveItem(args)
 end
 
 local function tryUseItem(args)
-    --local guix = sdk.to_managed_object(args[1])
     if instance == nil then
         return
     end
@@ -50,49 +63,102 @@ local function tryUseItem(args)
         instance:call('useActiveItem(System.Boolean)', nil)
     else 
         return
-    end     
+    end 
+end
+
+local function setItemSuccess()
+   itemSuccess = true
 end
 
 local function cancelUseItem(args)
-    itemSuccess = true
+    setItemSuccess()
+end
+
+local function skipPadInput(args)
+    if instance == nil then
+        return
+    end
+
+    if instance:call('checkClose()') then
+        return sdk.PreHookResult.SKIP_ORIGINAL
+    end
+end
+
+--[[
+local function potionCancel()
+    debug("potionCancel")
+    if cancelCount >= 1 then
+        itemSuccess = true
+    end
+    local healthMgr = sdk_PlayerManager:getMasterPlayer():get_Character():get_HunterHealth():get_HealthMgr()
+
+        if healthMgr ~= nil then
+            local health = healthMgr:get_Health()
+            debug(health)
+            local maxHealth = healthMgr:get_MaxHealth()
+            debug(maxHealth)
+            if health == maxHealth then
+                cancelUseItem()
+            end
+        end
+    end   
+end
+]]
+
+local function checkItemIDforCancel(args)
+    if args == nil then
+        return
+    end
+
+    local itemId = string.gsub(tostring(args[2]), "userdata: ", "") -- remove the prefix
+
+    if     itemId == "0000000000000001" --Potion
+        or itemId == "0000000000000002" --Mega Potion
+    then
+        cancelCount = cancelCount + 1
+    end
+
+    if cancelCount >= 1 then
+        setItemSuccess()
+    end
 end
 
 
 -- HOOKS --------------------------------
 -- Item used call and save
-local sdk_GUI020008 = sdk.find_type_definition("app.GUI020008")
 if sdk_GUI020008 then
-    sdk.hook(sdk_GUI020008:get_method("useActiveItem"), saveItem, nil)   
+    sdk.hook(sdk_GUI020008:get_method('onOpenApp'), cancelUseItem, nil)
+    sdk.hook(sdk_GUI020008:get_method("useActiveItem"), saveItem, nil)
 end
 
 -- Item used successfully
-local sdk_HunterExtendBase = sdk.find_type_definition("app.HunterCharacter.cHunterExtendBase")
 if sdk_HunterExtendBase then
     sdk.hook(sdk_HunterExtendBase:get_method("successItem(app.ItemDef.ID, System.Int32, System.Boolean, ace.ShellBase, System.Single, System.Boolean, app.ItemDef.ID, System.Boolean)"), cancelUseItem, nil)
 end
 
 -- Retry item Use
-local sdk_PlayerManager = sdk.find_type_definition("app.PlayerManager")
 if sdk_PlayerManager then
     sdk.hook(sdk_PlayerManager:get_method("update"), tryUseItem, nil)
 end
 
+-- Skip pad control if HUD is closed
+if sdk_cGUIShortcutPadControl then
+    sdk.hook(sdk_cGUIShortcutPadControl:get_method("move(System.Single, via.vec2)"), skipPadInput, nil)
+end 
+
 -- Cancels
-if itemSuccess == nil then
+if itemSuccess == false or itemSuccess == nil then
     -- Dodge cancel
-    local sdk_cHunterBadCondidions = sdk.find_type_definition("app.HunterBadConditions.cHunterBadConditions")
     if sdk_cHunterBadCondidions then
         sdk.hook(sdk_cHunterBadCondidions:get_method("onDodgeAction(app.HunterCharacter, System.Boolean)"), cancelUseItem, nil)
     end
 
     -- Attack cancel
-    local sdk_Weapon = sdk.find_type_definition("app.Weapon")
     if sdk_Weapon then
         sdk.hook(sdk_Weapon:get_method("evAttackCollisionActive"), cancelUseItem, nil)
     end
 
     -- Seikret cancel
-    local sdk_PlayerUtil = sdk.find_type_definition("app.PlayerUtil")
     if sdk_PlayerUtil then
         sdk.hook(sdk_PlayerUtil:get_method("isPorterCallButtonOptionSucess"), cancelUseItem, nil)
     end
@@ -122,16 +188,17 @@ if itemSuccess == nil then
     if sdk_Wp09 then
         sdk.hook(sdk_Wp09:get_method("doEnter"), cancelUseItem, nil)
     end
-
 end
 
-
+if sdk_HunterItemActionTable then
+        sdk.hook(sdk_HunterItemActionTable:get_method("getItemActionTypeFromItemID"), checkItemIDforCancel, nil)
+end
 
 
 -- reFramework settings ----------------------------
 re.on_draw_ui(function()
-    if imgui.tree_node("Action queue") then
-        if imgui.checkbox("Action queue", settings.Enable) then
+    if imgui.tree_node("Radial queue") then
+        if imgui.checkbox("Radial queue", settings.Enable) then
             settings.Enable = not settings.Enable
             save_settings()
         end
