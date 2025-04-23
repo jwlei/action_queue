@@ -7,6 +7,7 @@ local instance = nil
 local itemSuccess = nil
 local cancelCount = 0
 local shouldSkipPad = true
+local resetTime = nil
 
 
 local sdk_GUI020008 = sdk.find_type_definition("app.GUI020008")
@@ -52,12 +53,18 @@ local function load_settings()
         if settings.Enable == nil then
             settings.Enable = 1
         end
+
+        if settings.ResetTimer == nil then
+            settings.ResetTimer = 3
+        end
     else
         save_settings()
     end
 end
 
 load_settings()
+
+
 
 -- Core functions ------------------------
 local function saveItem(args)
@@ -66,24 +73,35 @@ local function saveItem(args)
     shouldSkipPad = true
 end
 
-local function tryUseItem(args)
-    if instance == nil then
-        return
-    end
-    --debug(itemSuccess)
-    if itemSuccess == false then 
-        instance:call('useActiveItem(System.Boolean)', nil)
-    else 
-        return
-    end 
-end
-
 local function setItemSuccess()
    itemSuccess = true
+   resetTime = nil
 end
 
 local function cancelUseItem(args)
     setItemSuccess()
+end
+
+-- Misc
+local function startTimer()
+    if resetTime == nil then
+        if settings.ResetTimer == nil then 
+                   resetTime = os.time() + 3
+        else
+            resetTime = os.time() + settings.ResetTimer
+        end
+    end
+end
+
+local function checkIfTimerCancel()
+    if resetTime == nil then
+        startTimer()
+    end
+    local currentTime = os.time()
+    if currentTime >= resetTime then
+        setItemSuccess()
+        resetTime = nil
+    end
 end
 
 local function skipPadInput(args)
@@ -115,6 +133,22 @@ local function checkItemIDforCancel(args)
         setItemSuccess()
     end
 end
+
+local function tryUseItem(args)
+    if instance == nil then
+        return
+    end
+
+    checkIfTimerCancel()
+    --debug(itemSuccess)
+    if itemSuccess == false then 
+        instance:call('useActiveItem(System.Boolean)', nil)
+    else 
+        return
+    end 
+end
+
+
 
 
 -- HOOKS --------------------------------
@@ -222,6 +256,10 @@ re.on_draw_ui(function()
     if imgui.tree_node("Radial queue") then
         if imgui.checkbox("Radial queue", settings.Enable) then
             settings.Enable = not settings.Enable
+            save_settings()
+        end
+        if imgui.slider_int("Reset timer (s)", settings.ResetTimer, 1, 10) then
+            settings.ResetTimer = settings.ResetTimer
             save_settings()
         end
         imgui.tree_pop()
