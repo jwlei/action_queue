@@ -126,6 +126,15 @@ local function checkItemIDforCancel(args)
     end
 end
 
+--Todo
+local function get_IsAim(retval)
+    local hunter = sdk.get_managed_singleton("app.PlayerManager"):getMasterPlayer():get_ContextHolder():get_Hunter()
+    is_aim = hunter:get_IsAim()
+    if is_aim == true then
+        setItemSuccess()
+    end
+end
+
 
 -- HOOKS --------------------------------
 -- Item used call and save
