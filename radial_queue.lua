@@ -152,9 +152,12 @@ end
 -- Cancels
 if itemSuccess == false or itemSuccess == nil then
     -- Focus
+    --[[
     if sdk_HunterCharacter then
         sdk.hook(sdk_HunterCharacter:get_method("changeActionRequest(app.AppActionDef.LAYER, ace.ACTION_ID, System.Boolean)"), cancelUseItemFocus, nil)
     end
+    ]]
+
     
     -- Dodge
     if sdk_cHunterBadCondidions then
