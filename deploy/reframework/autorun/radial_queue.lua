@@ -6,8 +6,12 @@
 local instance = nil
 local itemSuccess = nil
 local cancelCount = 0
+local shouldSkipPad = true
+
 
 local sdk_GUI020008 = sdk.find_type_definition("app.GUI020008")
+local sdk_GUI030208 = sdk.find_type_definition("app.GUI030208")
+local sdk_cGUIPartsShortcutFrameBase = sdk.find_type_definition("app.cGUIPartsShortcutFrameBase")
 local sdk_HunterExtendBase = sdk.find_type_definition("app.HunterCharacter.cHunterExtendBase")
 local sdk_PlayerManager = sdk.find_type_definition("app.PlayerManager")
 local sdk_cHunterBadCondidions = sdk.find_type_definition("app.HunterBadConditions.cHunterBadConditions")
@@ -19,6 +23,10 @@ local sdk_ChatManager = sdk.find_type_definition("app.ChatManager")
 local sdk_HunterCharacter = sdk.find_type_definition("app.HunterCharacter")
 local sdk_WpCommonSubAction = sdk.find_type_definition("app.WpCommonSubAction.cAimStart")
 --local sdk_PlayerCommonSubAction = sdk.find_type_definition("app.PlayerCommonSubAction.cSlingerAim")
+local sdk_mcOtomoCommunicator = sdk.find_type_definition("app.mcOtomoCommunicator")
+
+local sdk_mcHunterBonfire = sdk.find_type_definition("app.mcHunterBonfire")
+local sdk_mcHunterFishing = sdk.find_type_definition("app.mcHunterFishing")
 
 
 -- SETTINGS --------------------------------
@@ -55,13 +63,14 @@ load_settings()
 local function saveItem(args)
     instance = sdk.to_managed_object(args[2])
     itemSuccess = false
+    shouldSkipPad = true
 end
 
 local function tryUseItem(args)
     if instance == nil then
         return
     end
-
+    --debug(itemSuccess)
     if itemSuccess == false then 
         instance:call('useActiveItem(System.Boolean)', nil)
     else 
@@ -77,34 +86,15 @@ local function cancelUseItem(args)
     setItemSuccess()
 end
 
---[[
-local function cancelUseItemFocus(retval)
-    if retval == nil then return end
-    local isAim = (sdk.to_int64(retval) & 1)
-  
-    if isAim == 1 then
-        setItemSuccess()
-    end
-end
-
-]]
-
-local function cancelUseItemFocus(args)
-    local actionID = sdk.to_int64(args[4])
-    -- 4835046936 focus
-    debug(actionID)
-    if actionID == 4835046936 then
-        setItemSuccess()
-    end
-end
-
 local function skipPadInput(args)
     if instance == nil then
         return
     end
 
-    if instance:call('checkClose()') then
-        return sdk.PreHookResult.SKIP_ORIGINAL
+    if shouldSkipPad == true then 
+        if instance:call('checkClose()') then
+            return sdk.PreHookResult.SKIP_ORIGINAL
+        end
     end
 end
 
@@ -122,15 +112,6 @@ local function checkItemIDforCancel(args)
     end
 
     if cancelCount >= 1 then
-        setItemSuccess()
-    end
-end
-
---Todo
-local function get_IsAim(retval)
-    local hunter = sdk.get_managed_singleton("app.PlayerManager"):getMasterPlayer():get_ContextHolder():get_Hunter()
-    is_aim = hunter:get_IsAim()
-    if is_aim == true then
         setItemSuccess()
     end
 end
@@ -156,18 +137,21 @@ end
 -- Skip pad control if HUD is closed
 if sdk_cGUIShortcutPadControl then
     sdk.hook(sdk_cGUIShortcutPadControl:get_method("move(System.Single, via.vec2)"), skipPadInput, nil)
-end 
+end
+
+-- Dont skip pad in customize radial menu
+if sdk_GUI030208 then
+    sdk.hook(
+        sdk_GUI030208:get_method("guiVisibleUpdate"),
+        function(args)
+            shouldSkipPad = false
+        end,
+        nil
+    )
+end
 
 -- Cancels
 if itemSuccess == false or itemSuccess == nil then
-    -- Focus
-    --[[
-    if sdk_HunterCharacter then
-        sdk.hook(sdk_HunterCharacter:get_method("changeActionRequest(app.AppActionDef.LAYER, ace.ACTION_ID, System.Boolean)"), cancelUseItemFocus, nil)
-    end
-    ]]
-
-    
     -- Dodge
     if sdk_cHunterBadCondidions then
         sdk.hook(sdk_cHunterBadCondidions:get_method("onDodgeAction(app.HunterCharacter, System.Boolean)"), cancelUseItem, nil)
@@ -219,20 +203,18 @@ if sdk_ChatManager then
     sdk.hook(sdk_ChatManager:get_method("sendStamp"), cancelUseItem, nil)
 end
 
-
-
-
-
---[[
-if sdk_WpCommonSubAction then
-    sdk.hook(sdk_WpCommonSubAction:get_method("doEnter"), cancelUseItem, nil)
-end 
-
-if sdk_PlayerCommonSubAction then
-    sdk.hook(sdk_PlayerCommonSubAction:get_method("doUpdate"), cancelUseItem, nil)
+if sdk_mcOtomoCommunicator then
+    sdk.hook(sdk_mcOtomoCommunicator:get_method("requestEmote"), cancelUseItem, nil)
 end
 
-]]
+if sdk_mcHunterBonfire then
+    sdk.hook(sdk_mcHunterBonfire:get_method("updateMain"), cancelUseItem, nil)
+end
+
+if sdk_mcHunterFishing then
+    sdk.hook(sdk_mcHunterFishing:get_method("updateMain"), cancelUseItem, nil)
+end
+
 
 
 -- reFramework settings ----------------------------
@@ -245,3 +227,37 @@ re.on_draw_ui(function()
         imgui.tree_pop()
     end
 end)
+
+--[[
+--Todo
+local function cancelUseItemFocus(retval)
+    if retval == nil then return end
+    local isAim = (sdk.to_int64(retval) & 1)
+  
+    if isAim == 1 then
+        setItemSuccess()
+    end
+end
+
+-- Focus
+if sdk_HunterCharacter then
+    sdk.hook(sdk_HunterCharacter:get_method("changeActionRequest(app.AppActionDef.LAYER, ace.ACTION_ID, System.Boolean)"), cancelUseItemFocus, nil)
+end
+
+local function get_IsAim(retval)
+    local hunter = sdk.get_managed_singleton("app.PlayerManager"):getMasterPlayer():get_ContextHolder():get_Hunter()
+    is_aim = hunter:get_IsAim()
+    if is_aim == true then
+        setItemSuccess()
+    end
+end
+
+local function cancelUseItemFocus(args)
+    local actionID = sdk.to_int64(args[4])
+    -- 4835046936 focus
+    if actionID == 4835046936 then
+        setItemSuccess()
+    end
+end
+
+]]
