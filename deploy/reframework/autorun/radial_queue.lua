@@ -1,6 +1,7 @@
 -- @Author taakefyrsten
 -- https://next.nexusmods.com/profile/taakefyrsten
 -- https://github.com/jwlei/radial_queue
+-- Version 1.2
 
 -- INIT ------------------------------------
 local instance = nil
@@ -34,28 +35,34 @@ local sdk_mcHunterFishing = sdk.find_type_definition("app.mcHunterFishing")
 
 local settings = {
     Enable = true,  -- Toggle mod
+    ResetTimerNoCombat = 1, -- Time in seconds to reset item use
+    ResetTimerCombat = 5
 }
 
 local function debug(msg)
     local timestamp = os.date("%H:%M:%S")
-    print('[IQ]' .. '[' .. timestamp .. ']'.. '[debug] ' .. tostring(msg))
+    print('[RQ]' .. '[' .. timestamp .. ']'.. '[DEBUG] ' .. tostring(msg))
 end
 
 
 local function save_settings()
-    json.dump_file("ItemQueue.json", settings)
+    json.dump_file("radial_queue.json", settings)
 end
 
 local function load_settings()
-    local loadedTable = json.load_file("ItemQueue.json")
+    local loadedTable = json.load_file("radial_queue.json")
     if loadedTable then
         settings = loadedTable
         if settings.Enable == nil then
             settings.Enable = 1
         end
 
-        if settings.ResetTimer == nil then
-            settings.ResetTimer = 3
+        if settings.ResetTimerNoCombat == nil then
+            settings.ResetTimerNoCombat = 1
+        end
+
+        if settings.ResetTimerCombat == nil then
+            settings.ResetTimerCombat = 4
         end
     else
         save_settings()
@@ -83,24 +90,54 @@ local function cancelUseItem(args)
 end
 
 -- Misc
+local function getHunterCharacterCombat()
+    local HunterCharacter = nil
+
+	local Player = sdk.get_managed_singleton("app.PlayerManager"):get_field("_PlayerList")[0]
+	if Player == nil then 
+		return 
+	end
+
+	local HunterCharacter = Player:get_field("_PlayerInfo"):get_field("<Character>k__BackingField")
+	if HunterCharacter == nil then
+		return
+    end
+
+    if HunterCharacter:call("get_IsCombat()") == true 
+        or HunterCharacter:call("get_IsCombatBoss()") == true
+        --HunterCharacter:call("get_IsHalfCombat()")
+        return true
+    else
+        return false
+	end
+end
+
 local function startTimer()
     if resetTime == nil then
-        if settings.ResetTimer == nil then 
-                   resetTime = os.time() + 3
+        if settings.ResetTimerNoCombat == nil then 
+                   resetTime = os.time() + 4
+        elseif getHunterCharacterCombat() == true then
+            resetTime = os.time() + settings.ResetTimerCombat
+            --debug("Timer set to COMBAT")
+            --debug("Timer started, " .. settings.ResetTimerCombat .. "s")
         else
-            resetTime = os.time() + settings.ResetTimer
+            resetTime = os.time() + settings.ResetTimerNoCombat
+            --debug("Timer set to NO COMBAT")
+            --debug("Timer started, " .. settings.ResetTimerNoCombat .. "s")
         end
     end
 end
 
 local function checkIfTimerCancel()
-    if resetTime == nil then
+    if resetTime == nil and itemSuccess == false then
         startTimer()
     end
-    local currentTime = os.time()
-    if currentTime >= resetTime then
+
+   local currentTime = os.time()
+    if resetTime ~= nil and currentTime >= resetTime then
         setItemSuccess()
         resetTime = nil
+        --debug("Timer expired, item use cancelled")
     end
 end
 
@@ -258,13 +295,30 @@ re.on_draw_ui(function()
             settings.Enable = not settings.Enable
             save_settings()
         end
-        if imgui.slider_int("Reset timer (s)", settings.ResetTimer, 1, 10) then
-            settings.ResetTimer = settings.ResetTimer
-            save_settings()
+
+        if settings.Enable then
+            local changed, new_value_ResetTimerCombat = imgui.slider_int("Combat reset timer (s)", settings.ResetTimerCombat, 1, 20)
+            if changed then
+                settings.ResetTimerCombat = new_value_ResetTimerCombat
+                save_settings()
+            end
+            if imgui.is_item_hovered() then
+                imgui.set_tooltip("Reset all action executions after X seconds regardless while in combat with a monster")
+            end
+
+            local changed, new_value_ResetTimerNoCombat = imgui.slider_int("Out of combat reset timer (s)", settings.ResetTimerNoCombat, 1, 20)
+            if changed then
+                settings.ResetTimerNoCombat = new_value_ResetTimerNoCombat
+                save_settings()
+            end
+            if imgui.is_item_hovered() then
+                imgui.set_tooltip("Reset all action executions after X seconds regardless while not in combat with a monster")
+            end
         end
         imgui.tree_pop()
     end
 end)
+
 
 --[[
 --Todo
