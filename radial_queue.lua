@@ -306,7 +306,7 @@ re.on_draw_ui(function()
                 imgui.set_tooltip("Reset all action executions after X seconds regardless while in combat with a monster")
             end
 
-            local changed, new_value_ResetTimerNoCombat = imgui.slider_int("Out of combat reset timer (s)", settings.ResetTimerNoCombat, 1, 20)
+            local changed, new_value_ResetTimerNoCombat = imgui.slider_int("Out of combat reset timer (s)", settings.ResetTimerNoCombat, 0, 20)
             if changed then
                 settings.ResetTimerNoCombat = new_value_ResetTimerNoCombat
                 save_settings()
