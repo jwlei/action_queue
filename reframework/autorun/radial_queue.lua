@@ -62,7 +62,7 @@ local function load_settings()
         end
 
         if settings.ResetTimerCombat == nil then
-            settings.ResetTimerCombat = 4
+            settings.ResetTimerCombat = 15
         end
     else
         save_settings()
@@ -104,7 +104,7 @@ local function getHunterCharacterCombat()
     end
 
     if HunterCharacter:call("get_IsCombat()") == true 
-        or HunterCharacter:call("get_IsCombatBoss()") == true
+        or HunterCharacter:call("get_IsCombatBoss()") == true then
         --HunterCharacter:call("get_IsHalfCombat()")
         return true
     else
