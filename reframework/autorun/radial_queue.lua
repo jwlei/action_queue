@@ -11,6 +11,7 @@ local shouldSkipPad = true
 local resetTime = nil
 local executing = false
 local HunterCharacter = nil
+local loadedTable = nil
 
 
 local type_GUI020008 = sdk.find_type_definition("app.GUI020008")
@@ -57,7 +58,9 @@ local function save_settings()
 end
 
 local function load_settings()
-    local loadedTable = json.load_file("radial_queue.json")
+    if loadedTable == nil then
+        loadedTable= json.load_file("radial_queue.json")
+    end 
     if loadedTable then
         settings = loadedTable
         if settings.Enable == nil then
@@ -90,6 +93,9 @@ load_settings()
 
 -- Core functions ------------------------
 local function saveItem(args)
+    if settings.Enable == false then 
+        return 
+    end
     instance = sdk.to_managed_object(args[2])
     
     if executing == false then
@@ -300,7 +306,7 @@ end
 
 
 
-if settings.Enable then
+if settings.Enable == true then
     -- HOOKS --------------------------------
     -- Item used call and save
     if type_GUI020008 then
@@ -423,12 +429,14 @@ re.on_draw_ui(function()
         if imgui.checkbox("Enable", settings.Enable) then
             settings.Enable = not settings.Enable
             save_settings()
+            load_settings()
         end
 
         if settings.Enable then
             if imgui.checkbox("Enable combat reset timer", settings.EnableCombatTimer) then
                 settings.EnableCombatTimer = not settings.EnableCombatTimer
                 save_settings()
+                load_settings()
             end
             
             if settings.EnableCombatTimer then
@@ -436,6 +444,7 @@ re.on_draw_ui(function()
                 if changed then
                     settings.ResetTimerCombat = new_value_ResetTimerCombat
                     save_settings()
+                    load_settings()
                 end
                 if imgui.is_item_hovered() then
                     imgui.set_tooltip("Reset all action executions after X seconds regardless while in combat with a monster")
@@ -445,6 +454,7 @@ re.on_draw_ui(function()
             if imgui.checkbox("Enable out of combat reset timer", settings.EnableNoCombatTimer) then
                 settings.EnableNoCombatTimer = not settings.EnableNoCombatTimer
                 save_settings()
+                load_settings()
             end
 
             if settings.EnableNoCombatTimer then
@@ -452,6 +462,7 @@ re.on_draw_ui(function()
                 if changed then
                     settings.ResetTimerNoCombat = new_value_ResetTimerNoCombat
                     save_settings()
+                    load_settings()
                 end
                 if imgui.is_item_hovered() then
                     imgui.set_tooltip("Reset all action executions after X seconds regardless while not in combat with a monster")
