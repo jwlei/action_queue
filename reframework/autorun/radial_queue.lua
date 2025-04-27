@@ -1,7 +1,7 @@
 -- @Author taakefyrsten
 -- https://next.nexusmods.com/profile/taakefyrsten
 -- https://github.com/jwlei/radial_queue
--- Version 1.3
+-- Version 1.4
 
 -- INIT ------------------------------------
 local instance = nil
@@ -13,25 +13,28 @@ local executing = false
 local HunterCharacter = nil
 
 
-local sdk_GUI020008 = sdk.find_type_definition("app.GUI020008")
-local sdk_GUI030208 = sdk.find_type_definition("app.GUI030208")
-local sdk_cGUIPartsShortcutFrameBase = sdk.find_type_definition("app.cGUIPartsShortcutFrameBase")
-local sdk_HunterExtendBase = sdk.find_type_definition("app.HunterCharacter.cHunterExtendBase")
-local sdk_PlayerManager = sdk.find_type_definition("app.PlayerManager")
-local sdk_cHunterBadConditions = sdk.find_type_definition("app.HunterBadConditions.cHunterBadConditions")
-local sdk_Weapon = sdk.find_type_definition("app.Weapon")
-local sdk_PlayerUtil = sdk.find_type_definition("app.PlayerUtil")
-local sdk_cGUIShortcutPadControl = sdk.find_type_definition("app.cGUIShortcutPadControl")
-local sdk_HunterItemActionTable = sdk.find_type_definition("app.HunterItemActionTable")
-local sdk_ChatManager = sdk.find_type_definition("app.ChatManager")
-local sdk_HunterCharacter = sdk.find_type_definition("app.HunterCharacter")
-local sdk_WpCommonSubAction = sdk.find_type_definition("app.WpCommonSubAction.cAimStart")
---local sdk_PlayerCommonSubAction = sdk.find_type_definition("app.PlayerCommonSubAction.cSlingerAim")
-local sdk_mcOtomoCommunicator = sdk.find_type_definition("app.mcOtomoCommunicator")
-local sdk_cCallPorter = sdk.find_type_definition("app.PlayerCommonSubAction.cCallPorter")
-local sdk_mcHunterBonfire = sdk.find_type_definition("app.mcHunterBonfire")
-local sdk_mcHunterFishing = sdk.find_type_definition("app.mcHunterFishing")
-
+local type_GUI020008 = sdk.find_type_definition("app.GUI020008")
+local type_GUI030208 = sdk.find_type_definition("app.GUI030208")
+local type_cGUIPartsShortcutFrameBase = sdk.find_type_definition("app.cGUIPartsShortcutFrameBase")
+local type_HunterExtendBase = sdk.find_type_definition("app.HunterCharacter.cHunterExtendBase")
+local type_PlayerManager = sdk.find_type_definition("app.PlayerManager")
+local type_cHunterBadConditions = sdk.find_type_definition("app.HunterBadConditions.cHunterBadConditions")
+local type_Weapon = sdk.find_type_definition("app.Weapon")
+local type_PlayerUtil = sdk.find_type_definition("app.PlayerUtil")
+local type_cGUIShortcutPadControl = sdk.find_type_definition("app.cGUIShortcutPadControl")
+local type_HunterItemActionTable = sdk.find_type_definition("app.HunterItemActionTable")
+local type_ChatManager = sdk.find_type_definition("app.ChatManager")
+local type_HunterCharacter = sdk.find_type_definition("app.HunterCharacter")
+local type_WpCommonSubAction = sdk.find_type_definition("app.WpCommonSubAction.cAimStart")
+--local type_PlayerCommonSubAction = sdk.find_type_definition("app.PlayerCommonSubAction.cSlingerAim")
+local type_mcOtomoCommunicator = sdk.find_type_definition("app.mcOtomoCommunicator")
+local type_cCallPorter = sdk.find_type_definition("app.PlayerCommonSubAction.cCallPorter")
+local type_mcHunterBonfire = sdk.find_type_definition("app.mcHunterBonfire")
+local type_mcHunterFishing = sdk.find_type_definition("app.mcHunterFishing")
+local type_PauseManagerBase = sdk.find_type_definition("ace.PauseManagerBase")
+local type_PhotoCameraController = sdk.find_type_definition("app.PhotoCameraController")
+local type_cGUIMapController = sdk.find_type_definition("app.cGUIMapController")
+local type_CameraSubAction = sdk.find_type_definition("app.CameraSubAction.cSougankyo")
 
 -- SETTINGS --------------------------------
 
@@ -40,7 +43,7 @@ local settings = {
     EnableNoCombatTimer = true,
     ResetTimerNoCombat = 1, -- Time in seconds to reset item use
     EnableCombatTimer = false,
-    ResetTimerCombat = 5
+    ResetTimerCombat = 15
 }
 
 local function debug(msg)
@@ -288,109 +291,130 @@ local function cancelTriggerFishing(args)
     end
 end
 
-
-
-
-
-
--- HOOKS --------------------------------
--- Item used call and save
-if sdk_GUI020008 then
-    sdk.hook(sdk_GUI020008:get_method('onOpenApp'), cancelUseItem, function(retval) debug("Canceled by sdk_GUI020008") end)
-    sdk.hook(sdk_GUI020008:get_method("useActiveItem"), saveItem, nil)
+local function cancelTriggerMisc(args)
+    itemSuccess = false
+    setItemSuccess()
 end
 
--- Item used successfully
-if sdk_HunterExtendBase then
-    sdk.hook(sdk_HunterExtendBase:get_method("successItem(app.ItemDef.ID, System.Int32, System.Boolean, ace.ShellBase, System.Single, System.Boolean, app.ItemDef.ID, System.Boolean)"), cancelUseItem, nil)
-end
 
--- Retry item Use
-if sdk_PlayerManager then
-    sdk.hook(sdk_PlayerManager:get_method("update"), tryUseItem, nil)
-end
 
--- Skip pad control if HUD is closed
-if sdk_cGUIShortcutPadControl then
-    sdk.hook(sdk_cGUIShortcutPadControl:get_method("move(System.Single, via.vec2)"), skipPadInput, nil)
-end
 
--- Dont skip pad in customize radial menu
-if sdk_GUI030208 then
-    sdk.hook(
-        sdk_GUI030208:get_method("guiVisibleUpdate"),
-        function(args)
-            shouldSkipPad = false
-        end,
-        nil
-    )
-end
 
-if sdk_HunterItemActionTable then
-    sdk.hook(sdk_HunterItemActionTable:get_method("getItemActionTypeFromItemID"), checkItemIDforCancel, nil)
-end
-
--- Cancels
---if itemSuccess == false or itemSuccess == nil then
-    -- Dodge
-    if sdk_cHunterBadConditions then
-        sdk.hook(sdk_cHunterBadConditions:get_method("onDodgeAction(app.HunterCharacter, System.Boolean)"), cancelTriggerDodge, nil)
+if settings.Enable then
+    -- HOOKS --------------------------------
+    -- Item used call and save
+    if type_GUI020008 then
+        sdk.hook(type_GUI020008:get_method('onOpenApp'), cancelUseItem, function(retval) debug("Canceled by type_GUI020008") end)
+        sdk.hook(type_GUI020008:get_method("useActiveItem"), saveItem, nil)
     end
 
-    -- Attack
-    if sdk_Weapon then
-        sdk.hook(sdk_Weapon:get_method("evAttackCollisionActive"), cancelTriggerAttack, nil)
+    -- Item used successfully
+    if type_HunterExtendBase then
+        sdk.hook(type_HunterExtendBase:get_method("successItem(app.ItemDef.ID, System.Int32, System.Boolean, ace.ShellBase, System.Single, System.Boolean, app.ItemDef.ID, System.Boolean)"), cancelUseItem, nil)
     end
 
-    -- Seikret
-    if sdk_cCallPorter then
-        sdk.hook(sdk_cCallPorter:get_method("doCall"), cancelTriggerSeikret, nil)
+    -- Retry item Use
+    if type_PlayerManager then
+        sdk.hook(type_PlayerManager:get_method("update"), tryUseItem, nil)
     end
 
-    -- Guarding
-    local sdk_Wp00 = sdk.find_type_definition("app.Wp00Action.cGuard")
-    if sdk_Wp00 then
-        sdk.hook(sdk_Wp00:get_method("doEnter"), cancelTriggerWpAction, nil)
+    -- Skip pad control if HUD is closed
+    if type_cGUIShortcutPadControl then
+        sdk.hook(type_cGUIShortcutPadControl:get_method("move(System.Single, via.vec2)"), skipPadInput, nil)
     end
 
-    local sdk_Wp01 = sdk.find_type_definition("app.Wp01Action.cGuard")
-    if sdk_Wp01 then
-        sdk.hook(sdk_Wp01:get_method("doEnter"), cancelTriggerWpAction, nil)
+    -- Dont skip pad in customize radial menu
+    if type_GUI030208 then
+        sdk.hook(
+            type_GUI030208:get_method("guiVisibleUpdate"),
+            function(args)
+                shouldSkipPad = false
+            end,
+            nil
+        )
     end
 
-    local sdk_Wp06 = sdk.find_type_definition("app.Wp06Action.cGuard")
-    if sdk_Wp06 then
-        sdk.hook(sdk_Wp06:get_method("doEnter"), cancelTriggerWpAction, nil)
+    if type_HunterItemActionTable then
+        sdk.hook(type_HunterItemActionTable:get_method("getItemActionTypeFromItemID"), checkItemIDforCancel, nil)
     end
 
-    local sdk_Wp07 = sdk.find_type_definition("app.Wp07Action.cGuard")
-    if sdk_Wp07 then
-        sdk.hook(sdk_Wp07:get_method("doEnter"), cancelTriggerWpAction, nil)
+    -- Cancels
+    if itemSuccess == false or itemSuccess == nil then
+        -- Dodge
+        if type_cHunterBadConditions then
+            sdk.hook(type_cHunterBadConditions:get_method("onDodgeAction(app.HunterCharacter, System.Boolean)"), cancelTriggerDodge, nil)
+        end
+
+        -- Attack
+        if type_Weapon then
+            sdk.hook(type_Weapon:get_method("evAttackCollisionActive"), cancelTriggerAttack, nil)
+        end
+
+        -- Seikret
+        if type_cCallPorter then
+            sdk.hook(type_cCallPorter:get_method("doCall"), cancelTriggerSeikret, nil)
+        end
+
+        -- Guarding
+        local type_Wp00 = sdk.find_type_definition("app.Wp00Action.cGuard")
+        if type_Wp00 then
+            sdk.hook(type_Wp00:get_method("doEnter"), cancelTriggerWpAction, nil)
+        end
+
+        local type_Wp01 = sdk.find_type_definition("app.Wp01Action.cGuard")
+        if type_Wp01 then
+            sdk.hook(type_Wp01:get_method("doEnter"), cancelTriggerWpAction, nil)
+        end
+
+        local type_Wp06 = sdk.find_type_definition("app.Wp06Action.cGuard")
+        if type_Wp06 then
+            sdk.hook(type_Wp06:get_method("doEnter"), cancelTriggerWpAction, nil)
+        end
+
+        local type_Wp07 = sdk.find_type_definition("app.Wp07Action.cGuard")
+        if type_Wp07 then
+            sdk.hook(type_Wp07:get_method("doEnter"), cancelTriggerWpAction, nil)
+        end
+
+        local type_Wp09 = sdk.find_type_definition("app.Wp09Action.cGuard")
+        if type_Wp09 then
+            sdk.hook(type_Wp09:get_method("doEnter"), cancelTriggerWpAction, nil)
+        end
     end
 
-    local sdk_Wp09 = sdk.find_type_definition("app.Wp09Action.cGuard")
-    if sdk_Wp09 then
-        sdk.hook(sdk_Wp09:get_method("doEnter"), cancelTriggerWpAction, nil)
+    -- Only send a single stamp
+    if type_ChatManager then
+        sdk.hook(type_ChatManager:get_method("sendStamp"), cancelUseItem, function(retval) debug("Canceled by type_ChatManager") end)
     end
---end
 
--- Only send a single stamp
-if sdk_ChatManager then
-    sdk.hook(sdk_ChatManager:get_method("sendStamp"), cancelUseItem, function(retval) debug("Canceled by sdk_ChatManager") end)
+    if type_PauseManagerBase then
+        sdk.hook(type_PauseManagerBase:get_method("requestPause"), cancelTriggerMisc, nil)
+    end
+
+    if type_PhotoCameraController then
+        sdk.hook(type_PhotoCameraController:get_method("enable"), cancelTriggerMisc, nil)
+    end
+
+    if type_cGUIMapController then
+        sdk.hook(type_cGUIMapController:get_method("requestOpen"), cancelTriggerMisc, nil)
+    end
+
+    if type_CameraSubAction then
+        sdk.hook(type_CameraSubAction:get_method("enter"), cancelTriggerMisc, nil)
+    end
+
+    if type_mcOtomoCommunicator then
+        sdk.hook(type_mcOtomoCommunicator:get_method("requestEmote"), cancelTriggerOtomo, nil)
+    end
+
+    if type_mcHunterBonfire then
+        sdk.hook(type_mcHunterBonfire:get_method("updateMain"), cancelTriggerBonfire, nil)
+    end
+
+    if type_mcHunterFishing then
+        sdk.hook(type_mcHunterFishing:get_method("updateMain"), cancelTriggerFishing, nil)
+    end
 end
-
-if sdk_mcOtomoCommunicator then
-    sdk.hook(sdk_mcOtomoCommunicator:get_method("requestEmote"), cancelTriggerOtomo, nil)
-end
-
-if sdk_mcHunterBonfire then
-    sdk.hook(sdk_mcHunterBonfire:get_method("updateMain"), cancelTriggerBonfire, nil)
-end
-
-if sdk_mcHunterFishing then
-    sdk.hook(sdk_mcHunterFishing:get_method("updateMain"), cancelTriggerFishing, nil)
-end
-
 
 
 -- reFramework settings ----------------------------
@@ -408,7 +432,7 @@ re.on_draw_ui(function()
             end
             
             if settings.EnableCombatTimer then
-                local changed, new_value_ResetTimerCombat = imgui.slider_int("Combat reset timer (s)", settings.ResetTimerCombat, 1, 20)
+                local changed, new_value_ResetTimerCombat = imgui.slider_int("Combat reset timer (s)", settings.ResetTimerCombat, 1, 30)
                 if changed then
                     settings.ResetTimerCombat = new_value_ResetTimerCombat
                     save_settings()
@@ -424,7 +448,7 @@ re.on_draw_ui(function()
             end
 
             if settings.EnableNoCombatTimer then
-                local changed, new_value_ResetTimerNoCombat = imgui.slider_int("Out of combat reset timer (s)", settings.ResetTimerNoCombat, 0, 20)
+                local changed, new_value_ResetTimerNoCombat = imgui.slider_int("Out of combat reset timer (s)", settings.ResetTimerNoCombat, 0, 30)
                 if changed then
                     settings.ResetTimerNoCombat = new_value_ResetTimerNoCombat
                     save_settings()
@@ -451,8 +475,8 @@ local function cancelUseItemFocus(retval)
 end
 
 -- Focus
-if sdk_HunterCharacter then
-    sdk.hook(sdk_HunterCharacter:get_method("changeActionRequest(app.AppActionDef.LAYER, ace.ACTION_ID, System.Boolean)"), cancelUseItemFocus, nil)
+if type_HunterCharacter then
+    sdk.hook(type_HunterCharacter:get_method("changeActionRequest(app.AppActionDef.LAYER, ace.ACTION_ID, System.Boolean)"), cancelUseItemFocus, nil)
 end
 
 local function get_IsAim(retval)
