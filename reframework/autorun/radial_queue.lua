@@ -1,7 +1,7 @@
 -- @Author taakefyrsten
 -- https://next.nexusmods.com/profile/taakefyrsten
 -- https://github.com/jwlei/radial_queue
--- Version 1.4
+-- Version 1.5
 
 -- INIT ------------------------------------
 local instance = nil
@@ -12,10 +12,14 @@ local resetTime = nil
 local executing = false
 local HunterCharacter = nil
 local loadedTable = nil
+local sourceInput = nil
+local GUI020600_itemIndex_current = nil
 
-
-local type_GUI020008 = sdk.find_type_definition("app.GUI020008")
-local type_GUI030208 = sdk.find_type_definition("app.GUI030208")
+--app.GUI020006.requestOpenItemSlider Item bar
+--app.GUI020007 Radial M+KB
+local type_GUI020008 = sdk.find_type_definition("app.GUI020008") -- Radial Menu
+local type_GUI020600 = sdk.find_type_definition("app.GUI020600") -- M+KB item select
+local type_GUI030208 = sdk.find_type_definition("app.GUI030208") -- Radial customization
 local type_cGUIPartsShortcutFrameBase = sdk.find_type_definition("app.cGUIPartsShortcutFrameBase")
 local type_HunterExtendBase = sdk.find_type_definition("app.HunterCharacter.cHunterExtendBase")
 local type_PlayerManager = sdk.find_type_definition("app.PlayerManager")
@@ -27,7 +31,7 @@ local type_HunterItemActionTable = sdk.find_type_definition("app.HunterItemActio
 local type_ChatManager = sdk.find_type_definition("app.ChatManager")
 local type_HunterCharacter = sdk.find_type_definition("app.HunterCharacter")
 local type_WpCommonSubAction = sdk.find_type_definition("app.WpCommonSubAction.cAimStart")
---local type_PlayerCommonSubAction = sdk.find_type_definition("app.PlayerCommonSubAction.cSlingerAim")
+local type_PlayerCommonSubActionUseSlingerItem = sdk.find_type_definition("app.PlayerCommonSubAction.cUseSlingerItem")
 local type_mcOtomoCommunicator = sdk.find_type_definition("app.mcOtomoCommunicator")
 local type_cCallPorter = sdk.find_type_definition("app.PlayerCommonSubAction.cCallPorter")
 local type_mcHunterBonfire = sdk.find_type_definition("app.mcHunterBonfire")
@@ -35,11 +39,12 @@ local type_mcHunterFishing = sdk.find_type_definition("app.mcHunterFishing")
 local type_PauseManagerBase = sdk.find_type_definition("ace.PauseManagerBase")
 local type_PhotoCameraController = sdk.find_type_definition("app.PhotoCameraController")
 local type_cGUIMapController = sdk.find_type_definition("app.cGUIMapController")
-local type_CameraSubAction = sdk.find_type_definition("app.CameraSubAction.cSougankyo")
+local type_cSougankyo = sdk.find_type_definition("app.CameraSubAction.cSougankyo")
+local type_cGUIItemCraft = sdk.find_type_definition("app.cGUIItemCraft")
 
 -- SETTINGS --------------------------------
 
-local settings = {
+local config = {
     Enable = true,  -- Toggle mod
     EnableNoCombatTimer = true,
     ResetTimerNoCombat = 1, -- Time in seconds to reset item use
@@ -53,50 +58,66 @@ local function debug(msg)
 end
 
 
-local function save_settings()
-    json.dump_file("radial_queue.json", settings)
+local function save_config()
+    json.dump_file("radial_queue.json", config)
 end
 
-local function load_settings()
+local function load_config()
     if loadedTable == nil then
         loadedTable= json.load_file("radial_queue.json")
     end 
     if loadedTable then
-        settings = loadedTable
-        if settings.Enable == nil then
-            settings.Enable = 1
+        config = loadedTable
+        if config.Enable == nil then
+            config.Enable = 1
         end
 
-        if settings.EnableNoCombatTimer == nil then
-            settings.EnableNoCombatTimer = 1
+        if config.EnableNoCombatTimer == nil then
+            config.EnableNoCombatTimer = 1
         end
 
-        if settings.ResetTimerNoCombat == nil then
-            settings.ResetTimerNoCombat = 1
+        if config.ResetTimerNoCombat == nil then
+            config.ResetTimerNoCombat = 1
         end
 
-        if settings.EnableCombatTimer == nil then
-            settings.EnableCombatTimer = 0
+        if config.EnableCombatTimer == nil then
+            config.EnableCombatTimer = 0
         end
 
-        if settings.ResetTimerCombat == nil then
-            settings.ResetTimerCombat = 15
+        if config.ResetTimerCombat == nil then
+            config.ResetTimerCombat = 15
         end
     else
-        save_settings()
+        save_config()
     end
 end
 
-load_settings()
+load_config()
 
 
 
 -- Core functions ------------------------
+local function setInputSource(args)
+    if args == nil then
+        return
+    end
+    --ID 100 for M+KB, 55 for Radial
+    sourceInput = args:get_field("_PartsOwnerAccessor"):get_field("_Owner"):get_ID()
+    if sourceInput == nil then
+        return
+    end
+end
+
 local function saveItem(args)
-    if settings.Enable == false then 
+    if config.Enable == false then 
         return 
     end
     instance = sdk.to_managed_object(args[2])
+    setInputSource(instance)
+
+    if sourceInput == 100 then
+        GUI020600_itemIndex_current = tonumber(string.sub(string.gsub(tostring(args[3]), "userdata: ", ""), -2))
+    end
     
     if executing == false then
         debug("Action saved")
@@ -108,13 +129,13 @@ local function saveItem(args)
 end
 
 local function setItemSuccess()
-   if itemSuccess == false then
        debug("Action cancelled or finished")
        itemSuccess = true
        resetTime = nil
        executing = false
        cancelCount = 0
-    end   
+       sourceInput = nil 
+       GUI020600_itemIndex_current = nil
 end
 
 local function cancelUseItem(args)
@@ -155,19 +176,19 @@ end
 
 local function startTimer()
     if resetTime == nil then
-        if settings.ResetTimerNoCombat == nil then 
+        if config.ResetTimerNoCombat == nil then 
                    resetTime = os.time() + 1
-        elseif settings.ResetTimerCombat == nil then
+        elseif config.ResetTimerCombat == nil then
                    resetTime = os.time() + 15
         end
 
-        if getHunterCharacterCombat() == true and settings.EnableCombatTimer == true then
-            resetTime = os.time() + settings.ResetTimerCombat
-            debug("Timer COMBAT started, " .. settings.ResetTimerCombat .. "s")
+        if getHunterCharacterCombat() == true and config.EnableCombatTimer == true then
+            resetTime = os.time() + config.ResetTimerCombat
+            debug("Timer COMBAT started, " .. config.ResetTimerCombat .. "s")
 
-        elseif getHunterCharacterCombat() == false and settings.EnableNoCombatTimer == true then
-            resetTime = os.time() + settings.ResetTimerNoCombat
-            debug("Timer NO COMBAT started, " .. settings.ResetTimerNoCombat .. "s")
+        elseif getHunterCharacterCombat() == false and config.EnableNoCombatTimer == true then
+            resetTime = os.time() + config.ResetTimerNoCombat
+            debug("Timer NO COMBAT started, " .. config.ResetTimerNoCombat .. "s")
         else
             return
         end
@@ -175,7 +196,7 @@ local function startTimer()
 end
 
 local function checkIfTimerCancel()
-    if settings.EnableCombatTimer == true or settings.EnableNoCombatTimer == true then
+    if config.EnableCombatTimer == true or config.EnableNoCombatTimer == true then
         if resetTime == nil and itemSuccess == false then
         startTimer()
     end
@@ -225,16 +246,22 @@ local function tryUseItem(args)
     end
 
     checkIfTimerCancel()
+    
     --debug(itemSuccess)
-    if itemSuccess == false then 
-        instance:call('useActiveItem(System.Boolean)', nil)
+    if itemSuccess == false then
+        if sourceInput == 100 then
+            instance:call('execute(System.Int32)', GUI020600_itemIndex_current)
+        elseif sourceInput == 55 then
+            instance:call('useActiveItem(System.Boolean)', nil)
+        else
+            return
+        end
     else 
         return
     end 
 end
 
 local function cancelTriggerAttack(args) 
-    
     local obj_weapon = sdk.to_managed_object(args[2])
     
     if obj_weapon:get_IsMaster() == true then
@@ -272,6 +299,25 @@ local function cancelTriggerWpAction(args)
     end
 end
 
+local function cancelTriggerSlingerLoad(args)
+    local isMasterPlayer = sdk.to_managed_object(args[2]):get_field("_Character")
+    
+    if isMasterPlayer:get_IsMaster() == true then
+        --debug("CANCELLED BY MASTERPLAYER SLINGER LOAD")
+        setItemSuccess()
+    end
+end
+
+--[[
+local function cancelTriggerItemCraft(args)
+    local isMasterPlayer = sdk.to_managed_object(args[2]):get_field("_Owner"):get_field("")
+    if isMasterPlayer:get_IsMaster() == true then
+        --debug("CANCELLED BY MASTERPLAYER ITEM CRAFT")
+        setItemSuccess()
+    end
+end
+]]
+
 local function cancelTriggerOtomo(args)
     local isMasterPlayer = sdk.to_managed_object(args[2]):get_field("_OwnerHunter")
 
@@ -302,16 +348,29 @@ local function cancelTriggerMisc(args)
     setItemSuccess()
 end
 
+--[[
+local function closeGUI020600(retval)
+    if executing == true and sourceInput == 100 then
+        return sdk.PreHookResult.SKIP_ORIGINAL
+    end
+end
+]]
 
 
 
 
-if settings.Enable == true then
+
+if config.Enable == true then
     -- HOOKS --------------------------------
     -- Item used call and save
     if type_GUI020008 then
         sdk.hook(type_GUI020008:get_method('onOpenApp'), cancelUseItem, function(retval) debug("Canceled by type_GUI020008") end)
         sdk.hook(type_GUI020008:get_method("useActiveItem"), saveItem, nil)
+    end
+
+    -- Save item from M+KB
+    if type_GUI020600 then
+        sdk.hook(type_GUI020600:get_method("execute"), saveItem, nil)
     end
 
     -- Item used successfully
@@ -340,6 +399,7 @@ if settings.Enable == true then
         )
     end
 
+    -- Get ItemID for radial
     if type_HunterItemActionTable then
         sdk.hook(type_HunterItemActionTable:get_method("getItemActionTypeFromItemID"), checkItemIDforCancel, nil)
     end
@@ -388,81 +448,100 @@ if settings.Enable == true then
         end
     end
 
-    -- Only send a single stamp
+    -- Stamp
     if type_ChatManager then
         sdk.hook(type_ChatManager:get_method("sendStamp"), cancelUseItem, function(retval) debug("Canceled by type_ChatManager") end)
     end
 
+    -- Slinger reload
+    if type_PlayerCommonSubActionUseSlingerItem then
+        --sdk.hook(type_PlayerCommonSubActionUseSlingerItem:get_method("doItemLoad"), cancelUseItem, nil)
+        sdk.hook(type_PlayerCommonSubActionUseSlingerItem:get_method("doEnter"), cancelTriggerSlingerLoad, nil)
+    end
+
+    -- Pause
     if type_PauseManagerBase then
         sdk.hook(type_PauseManagerBase:get_method("requestPause"), cancelTriggerMisc, nil)
     end
 
+    -- Photo mode
     if type_PhotoCameraController then
         sdk.hook(type_PhotoCameraController:get_method("enable"), cancelTriggerMisc, nil)
     end
 
+    -- Map
     if type_cGUIMapController then
         sdk.hook(type_cGUIMapController:get_method("requestOpen"), cancelTriggerMisc, nil)
     end
 
-    if type_CameraSubAction then
-        sdk.hook(type_CameraSubAction:get_method("enter"), cancelTriggerMisc, nil)
+    -- Binoculars
+    if type_cSougankyo then
+        sdk.hook(type_cSougankyo:get_method("enter"), cancelTriggerMisc, nil)
     end
 
+    -- Item craft
+    if type_cGUIItemCraft then
+        sdk.hook(type_cGUIItemCraft:get_method("open"), cancelTriggerMisc, function(retval) debug("Cancelled by type_cGUIItemCraft") end)
+    end
+
+    -- Emote
     if type_mcOtomoCommunicator then
         sdk.hook(type_mcOtomoCommunicator:get_method("requestEmote"), cancelTriggerOtomo, nil)
     end
 
+    -- Grill
     if type_mcHunterBonfire then
         sdk.hook(type_mcHunterBonfire:get_method("updateMain"), cancelTriggerBonfire, nil)
     end
 
+    -- Fishing
     if type_mcHunterFishing then
         sdk.hook(type_mcHunterFishing:get_method("updateMain"), cancelTriggerFishing, nil)
     end
 end
 
 
--- reFramework settings ----------------------------
+-- reFramework config ----------------------------
 re.on_draw_ui(function()
+
     if imgui.tree_node("Radial queue") then
-        if imgui.checkbox("Enable", settings.Enable) then
-            settings.Enable = not settings.Enable
-            save_settings()
-            load_settings()
+        if imgui.checkbox("Enable", config.Enable) then
+            config.Enable = not config.Enable
+            save_config()
+            load_config()
         end
 
-        if settings.Enable then
-            if imgui.checkbox("Enable combat reset timer", settings.EnableCombatTimer) then
-                settings.EnableCombatTimer = not settings.EnableCombatTimer
-                save_settings()
-                load_settings()
+        if config.Enable then
+            if imgui.checkbox("Enable combat reset timer", config.EnableCombatTimer) then
+                config.EnableCombatTimer = not config.EnableCombatTimer
+                save_config()
+                load_config()
             end
             
-            if settings.EnableCombatTimer then
-                local changed, new_value_ResetTimerCombat = imgui.slider_int("Combat reset timer (s)", settings.ResetTimerCombat, 1, 30)
+            if config.EnableCombatTimer then
+                local changed, new_value_ResetTimerCombat = imgui.slider_int("Combat reset timer (s)", config.ResetTimerCombat, 1, 30)
                 if changed then
-                    settings.ResetTimerCombat = new_value_ResetTimerCombat
-                    save_settings()
-                    load_settings()
+                    config.ResetTimerCombat = new_value_ResetTimerCombat
+                    save_config()
+                    load_config()
                 end
                 if imgui.is_item_hovered() then
                     imgui.set_tooltip("Reset all action executions after X seconds regardless while in combat with a monster")
                 end
             end
 
-            if imgui.checkbox("Enable out of combat reset timer", settings.EnableNoCombatTimer) then
-                settings.EnableNoCombatTimer = not settings.EnableNoCombatTimer
-                save_settings()
-                load_settings()
+            if imgui.checkbox("Enable out of combat reset timer", config.EnableNoCombatTimer) then
+                config.EnableNoCombatTimer = not config.EnableNoCombatTimer
+                save_config()
+                load_config()
             end
 
-            if settings.EnableNoCombatTimer then
-                local changed, new_value_ResetTimerNoCombat = imgui.slider_int("Out of combat reset timer (s)", settings.ResetTimerNoCombat, 0, 30)
+            if config.EnableNoCombatTimer then
+                local changed, new_value_ResetTimerNoCombat = imgui.slider_int("Out of combat reset timer (s)", config.ResetTimerNoCombat, 0, 30)
                 if changed then
-                    settings.ResetTimerNoCombat = new_value_ResetTimerNoCombat
-                    save_settings()
-                    load_settings()
+                    config.ResetTimerNoCombat = new_value_ResetTimerNoCombat
+                    save_config()
+                    load_config()
                 end
                 if imgui.is_item_hovered() then
                     imgui.set_tooltip("Reset all action executions after X seconds regardless while not in combat with a monster")
