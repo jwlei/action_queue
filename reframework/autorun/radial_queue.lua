@@ -1,9 +1,10 @@
 -- @Author taakefyrsten
 -- https://next.nexusmods.com/profile/taakefyrsten
 -- https://github.com/jwlei/radial_queue
--- Version 1.5
+-- Version 1.6
 
 -- INIT ------------------------------------
+local debug_flag = false
 local instance = nil
 local itemSuccess = nil
 local cancelCount = 0
@@ -17,9 +18,14 @@ local GUI020600_itemIndex_current = nil
 
 --app.GUI020006.requestOpenItemSlider Item bar
 --app.GUI020007 Radial M+KB
+local type_GUI020006 = sdk.find_type_definition("app.GUI020006") -- Item bar
 local type_GUI020008 = sdk.find_type_definition("app.GUI020008") -- Radial Menu
 local type_GUI020600 = sdk.find_type_definition("app.GUI020600") -- M+KB item select
 local type_GUI030208 = sdk.find_type_definition("app.GUI030208") -- Radial customization
+local type_GUI040000 = sdk.find_type_definition("app.GUI040000") -- Member list
+local type_GUI040002 = sdk.find_type_definition("app.GUI040002") -- Invitation list
+local type_cGUI060000 = sdk.find_type_definition("app.cGUI060000Sign.cMapPlayerSign") -- Mini map ping
+local type_ChatLogCommunication = sdk.find_type_definition("app.GUIFlowChatLogCommunication") -- Chat log
 local type_cGUIPartsShortcutFrameBase = sdk.find_type_definition("app.cGUIPartsShortcutFrameBase")
 local type_HunterExtendBase = sdk.find_type_definition("app.HunterCharacter.cHunterExtendBase")
 local type_PlayerManager = sdk.find_type_definition("app.PlayerManager")
@@ -53,8 +59,10 @@ local config = {
 }
 
 local function debug(msg)
-    local timestamp = os.date("%H:%M:%S")
-    print('[RQ]' .. '[' .. timestamp .. ']'.. '[DEBUG] ' .. tostring(msg))
+    if debug_flag == true then
+        local timestamp = os.date("%H:%M:%S")
+        print('[RQ]' .. '[' .. timestamp .. ']'.. '[DEBUG] ' .. tostring(msg))
+    end
 end
 
 
@@ -97,12 +105,12 @@ load_config()
 
 
 -- Core functions ------------------------
-local function setInputSource(args)
-    if args == nil then
+local function setInputSource(instance)
+    if instance == nil then
         return
     end
     --ID 100 for M+KB, 55 for Radial
-    sourceInput = args:get_field("_PartsOwnerAccessor"):get_field("_Owner"):get_ID()
+    sourceInput = instance:get_field("_PartsOwnerAccessor"):get_field("_Owner"):get_ID()
     if sourceInput == nil then
         return
     end
@@ -265,7 +273,7 @@ local function cancelTriggerAttack(args)
     local obj_weapon = sdk.to_managed_object(args[2])
     
     if obj_weapon:get_IsMaster() == true then
-        --debug("CANCELLED BY MASTERPLAYER ATTACK")
+        debug("CANCELLED BY MASTERPLAYER ATTACK")
         setItemSuccess()
     end
     
@@ -275,7 +283,7 @@ local function cancelTriggerDodge(args)
     local obj_hunterBadconditionsHunterCharacter = sdk.to_managed_object(args[3])
     
     if obj_hunterBadconditionsHunterCharacter:get_IsMaster() == true then
-        --debug("CANCELLED BY  MASTERPLAYER DODGE")
+        debug("CANCELLED BY  MASTERPLAYER DODGE")
         setItemSuccess()
     end
 end
@@ -284,7 +292,7 @@ local function cancelTriggerSeikret(args)
     local isMasterPlayer = sdk.to_managed_object(args[2]):get_field("_Character")
 
     if isMasterPlayer:get_IsMaster() == true then
-        --debug("CANCELLED BY MASTERPLAYER SEIKRET")
+        debug("CANCELLED BY MASTERPLAYER SEIKRET")
         setItemSuccess()
     end
 end
@@ -294,7 +302,7 @@ local function cancelTriggerWpAction(args)
     local isMasterPlayer = sdk.to_managed_object(args[2]):get_field("_Character")
     
     if isMasterPlayer:get_IsMaster() == true then
-        --debug("CANCELLED BY MASTERPLAYER WPXX")
+        debug("CANCELLED BY MASTERPLAYER WPXX")
         setItemSuccess()
     end
 end
@@ -303,7 +311,7 @@ local function cancelTriggerSlingerLoad(args)
     local isMasterPlayer = sdk.to_managed_object(args[2]):get_field("_Character")
     
     if isMasterPlayer:get_IsMaster() == true then
-        --debug("CANCELLED BY MASTERPLAYER SLINGER LOAD")
+        debug("CANCELLED BY MASTERPLAYER SLINGER LOAD")
         setItemSuccess()
     end
 end
@@ -312,7 +320,7 @@ end
 local function cancelTriggerItemCraft(args)
     local isMasterPlayer = sdk.to_managed_object(args[2]):get_field("_Owner"):get_field("")
     if isMasterPlayer:get_IsMaster() == true then
-        --debug("CANCELLED BY MASTERPLAYER ITEM CRAFT")
+        debug("CANCELLED BY MASTERPLAYER ITEM CRAFT")
         setItemSuccess()
     end
 end
@@ -322,7 +330,7 @@ local function cancelTriggerOtomo(args)
     local isMasterPlayer = sdk.to_managed_object(args[2]):get_field("_OwnerHunter")
 
     if isMasterPlayer:get_IsMaster() == true then
-        --debug("CANCELLED BY MASTERPLAYER OTOMO")
+        debug("CANCELLED BY MASTERPLAYER OTOMO")
         setItemSuccess()
     end
 end
@@ -330,7 +338,7 @@ end
 local function cancelTriggerBonfire(args)
     local isMasterPlayer = sdk.to_managed_object(args[2]):get_field("_Chara")
     if isMasterPlayer:get_IsMaster() == true then
-        --debug("CANCELLED BY MASTERPLAYER BONFIRE")
+        debug("CANCELLED BY MASTERPLAYER BONFIRE")
         setItemSuccess()
     end
 end
@@ -338,25 +346,25 @@ end
 local function cancelTriggerFishing(args)
     local isMasterPlayer = sdk.to_managed_object(args[2]):get_field("Chara")
     if isMasterPlayer:get_IsMaster() == true then
-        --debug("CANCELLED BY MASTERPLAYER FISHING")
+       debug("CANCELLED BY MASTERPLAYER FISHING")
         setItemSuccess()
     end
 end
 
-local function cancelTriggerMisc(args)
+local function cancelTriggerForce(args)
+    debug("CANCELLED BY cancelTriggerForce")
     itemSuccess = false
     setItemSuccess()
 end
 
---[[
-local function closeGUI020600(retval)
-    if executing == true and sourceInput == 100 then
-        return sdk.PreHookResult.SKIP_ORIGINAL
+local function cancelTriggerAmmoCrafting(args)
+    local recipeIndex = tonumber(string.sub(string.gsub(tostring(sdk.to_managed_object(args[2]):get_field("<Recipe>k__BackingField"):get_field("_Index")), "userdata: ", ""), -2))
+    if recipeIndex ~= nil and recipeIndex >= 46 and recipeIndex <= 65 then
+        debug("CANCELLED BY cancelTriggerAmmoCrafting")
+        itemSuccess = false
+        setItemSuccess()
     end
 end
-]]
-
-
 
 
 
@@ -450,7 +458,7 @@ if config.Enable == true then
 
     -- Stamp
     if type_ChatManager then
-        sdk.hook(type_ChatManager:get_method("sendStamp"), cancelUseItem, function(retval) debug("Canceled by type_ChatManager") end)
+        sdk.hook(type_ChatManager:get_method("sendStamp"), cancelUseItem, nil)
     end
 
     -- Slinger reload
@@ -461,34 +469,34 @@ if config.Enable == true then
 
     -- Pause
     if type_PauseManagerBase then
-        sdk.hook(type_PauseManagerBase:get_method("requestPause"), cancelTriggerMisc, nil)
+        sdk.hook(type_PauseManagerBase:get_method("requestPause"), cancelTriggerForce, nil)
     end
 
     -- Photo mode
     if type_PhotoCameraController then
-        sdk.hook(type_PhotoCameraController:get_method("enable"), cancelTriggerMisc, nil)
+        sdk.hook(type_PhotoCameraController:get_method("enable"), cancelTriggerForce, nil)
     end
 
     -- Map
     if type_cGUIMapController then
-        sdk.hook(type_cGUIMapController:get_method("requestOpen"), cancelTriggerMisc, nil)
+        sdk.hook(type_cGUIMapController:get_method("requestOpen"), cancelTriggerForce, nil)
     end
 
     -- Binoculars
     if type_cSougankyo then
-        sdk.hook(type_cSougankyo:get_method("enter"), cancelTriggerMisc, nil)
+        sdk.hook(type_cSougankyo:get_method("enter"), cancelTriggerForce, nil)
     end
 
     -- Item craft
     if type_cGUIItemCraft then
-        sdk.hook(type_cGUIItemCraft:get_method("open"), cancelTriggerMisc, function(retval) debug("Cancelled by type_cGUIItemCraft") end)
+        sdk.hook(type_cGUIItemCraft:get_method("open"), cancelTriggerAmmoCrafting, nil)
     end
 
     -- Emote
     if type_mcOtomoCommunicator then
         sdk.hook(type_mcOtomoCommunicator:get_method("requestEmote"), cancelTriggerOtomo, nil)
     end
-
+    
     -- Grill
     if type_mcHunterBonfire then
         sdk.hook(type_mcHunterBonfire:get_method("updateMain"), cancelTriggerBonfire, nil)
@@ -497,6 +505,26 @@ if config.Enable == true then
     -- Fishing
     if type_mcHunterFishing then
         sdk.hook(type_mcHunterFishing:get_method("updateMain"), cancelTriggerFishing, nil)
+    end
+
+    -- Member list
+    if type_GUI040000 then
+        sdk.hook(type_GUI040000:get_method("onOpenApp"), cancelTriggerForce, function(retval) debug("cancelled by 40000") end)
+    end
+
+    -- Invitation list
+    if type_GUI040002 then
+        sdk.hook(type_GUI040002:get_method("onOpen"), cancelTriggerForce, function(retval) debug("cancelled by 40002") end)
+    end
+
+    -- Map ping
+    if type_cGUI060000 then
+        sdk.hook(type_cGUI060000:get_method("playSignCore"), cancelTriggerForce, function(retval) debug("cancelled by 06000") end)
+    end
+
+    -- Chat log
+    if type_ChatLogCommunication then
+        sdk.hook(type_ChatLogCommunication:get_method("start(app.GUIFlowChatLogCommunication.BOOT, ace.IGUIFlowHandle)"), cancelTriggerForce, function(retval) debug("cancelled by chatlog") end)
     end
 end
 
@@ -585,4 +613,62 @@ local function cancelUseItemFocus(args)
     end
 end
 
+]]
+
+--
+
+
+
+--[[
+-- Visual indicator
+local alpha_time = 0.0
+local last_time = os.clock()
+
+local fade_out_time = 0.0
+local fade_out_duration = 0.5
+local was_item_success = false
+local fading_out = false
+
+re.on_frame(function()
+    local current_time = os.clock()
+    local dt = current_time - last_time
+    last_time = current_time
+    if instance ~= nil then
+        if itemSuccess == false then
+            -- Reset fade state
+            fade_out_time = 0.0
+            fading_out = false
+
+            -- Animate alpha pulse
+            alpha_time = alpha_time + dt
+            local alpha = (math.sin(alpha_time * 2.0 * math.pi) + 1.0) / 2.0
+            local alpha_byte = math.floor(alpha * 255)
+
+            -- White pulsating
+            local color = (alpha_byte << 24) | 0xFFFFFF
+            draw.text("Action queued", 400, 300, color)
+        else
+            -- On first transition to true
+            if not was_item_success then
+                fade_out_time = 0.0
+                fading_out = true
+            end
+
+            -- Handle fading out green
+            if fading_out and fade_out_time <= fade_out_duration then
+                fade_out_time = fade_out_time + dt
+                local t = fade_out_time / fade_out_duration
+                local alpha = 1.0 - math.min(t, 1.0)
+                local alpha_byte = math.floor(alpha * 255)
+
+                -- Green fade
+                local color = (alpha_byte << 24) | 0x00FF00
+                draw.text("Action queued", 400, 300, color)
+            end
+        end
+
+        -- Track state change
+        was_item_success = itemSuccess
+    end
+end)
 ]]
