@@ -1,13 +1,14 @@
 -- @Author taakefyrsten
 -- https://next.nexusmods.com/profile/taakefyrsten
 -- https://github.com/jwlei/radial_queue
--- Version 1.7
+-- Version 2.0
 
 -- INIT ------------------------------------
-local debug_flag = true
+local debug_flag = false
 local instance = nil
 local itemSuccess = nil
 local cancelCount = 0
+--local cancelCountDodge = 0
 local shouldSkipPad = true
 local resetTime = nil
 local executing = false
@@ -55,7 +56,23 @@ local config = {
     EnableNoCombatTimer = true,
     ResetTimerNoCombat = 1, -- Time in seconds to reset item use
     EnableCombatTimer = false,
-    ResetTimerCombat = 15
+    ResetTimerCombat = 15,
+    --EnableDodgePersist = false,
+    --DodgePersistCount = 0,
+    IndicatorEnable = false,
+    IndicatorPosX = 720,
+    IndicatorPosY = 100,
+    IndicatorBaseRadius = 15,
+    IndicatorColorPending = 3356920024, 
+    IndicatorColorSuccess = 3355508539,
+    IndicatorShouldFade = true,
+    IndicatorFadeDuration = 0.5,
+    IndicatorShouldPulse = true,
+    IndicatorPulseSpeed = 1.0,
+    IndicatorPulseGrowth = 10,
+    IndicatorShowInMenu = true,
+    IndicatorMinimumPulseAlpha = 0.5,
+    IndicatorMaxPulseAlpha = 1.0
 }
 
 local function debug(msg)
@@ -95,6 +112,62 @@ local function load_config()
         if config.ResetTimerCombat == nil then
             config.ResetTimerCombat = 15
         end
+
+        if config.IndicatorEnable == nil then
+            config.IndicatorEnable = 0
+        end
+
+        if config.IndicatorPosX == nil then
+            config.IndicatorPosX = 720
+        end
+
+        if config.IndicatorPosY == nil then
+            config.IndicatorPosY = 100
+        end
+
+        if config.IndicatorBaseRadius == nil then
+            config.IndicatorBaseRadius = 20
+        end
+           
+        if config.IndicatorColorPending == nil then
+            config.IndicatorColorPending = 3356920024
+        end
+
+        if config.IndicatorColorSuccess == nil then
+            config.IndicatorColorSuccess = 3355508539
+        end
+
+        if config.IndicatorShouldFade == nil then
+            config.IndicatorShouldFade = 1
+        end
+
+        if config.IndicatorFadeDuration == nil then
+            config.IndicatorFadeDuration = 0.5
+        end
+
+        if config.IndicatorShouldPulse == nil then
+            config.IndicatorShouldPulse = 1
+        end
+
+        if config.IndicatorPulseSpeed == nil then
+            config.IndicatorPulseSpeed = 1.0
+        end
+
+        if config.IndicatorPulseGrowth == nil then
+            config.IndicatorPulseGrowth = 10
+        end
+
+        if config.IndicatorShowInMenu == nil then
+            config.IndicatorShowInMenu = 1
+        end
+
+        if config.IndicatorMinimumPulseAlpha == nil then
+            config.IndicatorMinimumPulseAlpha = 0.5
+        end
+
+        if config.IndicatorMaxPulseAlpha == nil then
+            config.IndicatorMaxPulseAlpha = 1.0
+        end
     else
         save_config()
     end
@@ -120,6 +193,7 @@ local function saveItem(args)
     if config.Enable == false then 
         return 
     end
+    
     instance = sdk.to_managed_object(args[2])
     setInputSource(instance)
 
@@ -134,6 +208,7 @@ local function saveItem(args)
     itemSuccess = false
     shouldSkipPad = true
     executing = true
+    --DodgePersistCount = 0
 end
 
 local function setItemSuccess()
@@ -144,9 +219,18 @@ local function setItemSuccess()
        cancelCount = 0
        sourceInput = nil 
        GUI020600_itemIndex_current = nil
+       --cancelCountDodge = 0
 end
 
 local function cancelUseItem(args)
+    --[[
+    -- Test and check for chat manager to not interrupt queue
+    local testX = sdk.to_managed_object(args[2])
+        debug(testX:get_type_definition())
+        debug(type_ChatManager)
+    ]]
+    
+
     if itemSuccess == false then
         setItemSuccess()
     end
@@ -285,6 +369,18 @@ local function cancelTriggerDodge(args)
     if obj_hunterBadconditionsHunterCharacter:get_IsMaster() == true then
         debug("CANCELLED BY  MASTERPLAYER DODGE")
         setItemSuccess()
+        --[[
+        if config.EnableDodgePersist == true then
+            cancelCountDodge = cancelCountDodge + 1
+            debug(cancelCountDodge)
+            if cancelCountDodge > config.DodgePersistCount then
+                debug("CANCELLED BY DODGE PERSIST")
+                setItemSuccess()
+            end
+        else
+            setItemSuccess()
+        end
+        ]]
     end
 end
 
@@ -365,6 +461,100 @@ local function cancelTriggerAmmoCrafting(args)
         setItemSuccess()
     end
 end
+
+-- Indicator ------------------------------------
+-- Initializer for indicator
+local alpha_time = 0.0
+local last_time = os.clock()
+
+local fade_out_time = 0.0
+local was_item_success = false
+local fading_out = false
+local initial_fade_radius = 0.0
+local final_fade_radius = 0.0
+local should_draw = nil
+
+local function draw_indicator_circle(x, y, radius, color)
+    local num_segments = 32
+    draw.filled_circle(x, y, radius, color, num_segments)
+end
+
+re.on_frame(function()
+    if not config.IndicatorEnable then return end
+
+    local show_indicator = (itemSuccess == false) or (config.IndicatorShowInMenu and reframework:is_drawing_ui())
+
+    local current_time = os.clock()
+    local dt = current_time - last_time
+    last_time = current_time
+
+    local x = config.IndicatorPosX
+    local y = config.IndicatorPosY
+    local base_radius = config.IndicatorBaseRadius
+    local growth = config.IndicatorPulseGrowth
+    local fade_duration = config.IndicatorFadeDuration
+
+    -- Only show if active OR menu preview enabled
+    if itemSuccess == false or show_indicator == true then
+        -- Reset fade tracking
+        fade_out_time = 0.0
+        fading_out = false
+
+        -- Animate pulse
+        alpha_time = alpha_time + dt
+
+        local pulse_speed = config.IndicatorPulseSpeed or 1.0  -- Default to 1.0 if unset
+        local sine = (math.sin(alpha_time * 2.0 * math.pi * pulse_speed) + 1.0) / 2.0
+
+        -- Visual alpha (fade from min_alpha to 1)
+        local min_alpha = config.IndicatorMinimumPulseAlpha or 0.0
+        local visual_alpha = min_alpha + ((config.IndicatorMaxPulseAlpha or 1.0) - min_alpha) * sine
+
+        -- Pulse growth only depends on the sine
+        local radius = base_radius
+        if config.IndicatorShouldPulse then
+            radius = base_radius + (growth * sine)
+        end
+
+        -- Save current radius for use in fade out
+        initial_fade_radius = radius
+        final_fade_radius = base_radius + growth + 5
+
+        -- Apply color with dynamic alpha
+        local alpha_byte = math.floor(visual_alpha * 255)
+        local color = (alpha_byte << 24) | (config.IndicatorColorPending & 0x00FFFFFF)
+
+        draw_indicator_circle(x, y, radius, color)
+    else
+        -- First success transition
+        if not was_item_success and show_indicator then
+            fade_out_time = 0.0
+            fading_out = true
+        end
+
+        -- Handle fading with radius growth
+        if config.IndicatorShouldFade and fade_out_time <= fade_duration then
+            fade_out_time = fade_out_time + dt
+            local t = math.min(fade_out_time / fade_duration, 1.0)
+
+            local alpha = 1.0 - t
+            local alpha_byte = math.floor(alpha * 255)
+
+            -- Interpolate radius from previous pulse to final size
+            local radius = initial_fade_radius + (final_fade_radius - initial_fade_radius) * t
+            local color = (alpha_byte << 24) | (config.IndicatorColorSuccess & 0x00FFFFFF)
+
+            draw_indicator_circle(x, y, radius, color)
+
+        elseif not config.IndicatorShouldFade then
+            -- No fade, just draw static green
+            draw_indicator_circle(x, y, base_radius, config.IndicatorColorSuccess)
+        end
+    end
+
+    -- Store last state
+    was_item_success = itemSuccess
+end)
 
 
 
@@ -531,9 +721,9 @@ if config.Enable == true then
 end
 
 
--- reFramework config ----------------------------
-re.on_draw_ui(function()
+-- reFramework config -----------------------------------------------------------------------------------------------------
 
+re.on_draw_ui(function()
     if imgui.tree_node("Radial queue") then
         if imgui.checkbox("Enable", config.Enable) then
             config.Enable = not config.Enable
@@ -577,100 +767,126 @@ re.on_draw_ui(function()
                     imgui.set_tooltip("Reset all action executions after X seconds regardless while not in combat with a monster")
                 end
             end
+            --[[
+            if imgui.checkbox("Enable dodge persist", config.EnableDodgePersist) then
+                config.EnableDodgePersist = not config.EnableDodgePersist
+                save_config()
+                load_config()
+            end
+            
+            if config.EnableDodgePersist then
+                local changed, new_value_DodgePersistCount = imgui.slider_int("Dodge persist count", config.DodgePersistCount, 0, 5)
+                if changed then
+                    config.DodgePersistCount = new_value_DodgePersistCount
+                    save_config()
+                    load_config()
+                end
+                if imgui.is_item_hovered() then
+                    imgui.set_tooltip("Number of dodges in which the queued item will persist")
+                end
+            end
+            ]]
+        end
+
+        if imgui.checkbox("Enable Indicator", config.IndicatorEnable) then
+            config.IndicatorEnable = not config.IndicatorEnable
+            save_config()
+            load_config()
+        end
+
+        if config.IndicatorEnable then
+            if imgui.checkbox("Show preview in REFramework menu", config.IndicatorShowInMenu) then
+                config.IndicatorShowInMenu = not config.IndicatorShowInMenu
+                save_config()
+                load_config()
+            end
+
+            local changedX, newX = imgui.slider_int("Position X", config.IndicatorPosX or 400, 0, 3840)
+            if changedX then
+                config.IndicatorPosX = newX
+                save_config()
+                load_config()
+            end
+
+            local changedY, newY = imgui.slider_int("Position Y", config.IndicatorPosY or 300, 0, 2160)
+            if changedY then
+                config.IndicatorPosY = newY
+                save_config()
+                load_config()
+            end
+
+            local changedRadius, newRadius = imgui.slider_int("Base Radius", config.IndicatorBaseRadius or 20, 1, 50)
+            if changedRadius then
+                config.IndicatorBaseRadius = newRadius
+                save_config()
+                load_config()
+            end
+
+            if imgui.checkbox("Pulse Radius", config.IndicatorShouldPulse) then
+                config.IndicatorShouldPulse = not config.IndicatorShouldPulse
+                save_config()
+                load_config()
+            end
+
+            if config.IndicatorShouldPulse then
+                local changedPulseSpeed, newPulseSpeed = imgui.slider_float("Pulse Speed", config.IndicatorPulseSpeed or 1.0, 0.1, 5.0)
+                if changedPulseSpeed then
+                    config.IndicatorPulseSpeed = newPulseSpeed
+                    save_config()
+                    load_config()
+                end
+
+                local changedMinAlpha, newMinAlpha = imgui.slider_float("Minimum Pulse Alpha", config.IndicatorMinimumPulseAlpha or 0.0, 0.0, 1.0)
+                if changedMinAlpha then
+                    config.IndicatorMinimumPulseAlpha = newMinAlpha
+                    save_config()
+                    load_config()
+                end
+
+                local changedMaxAlpha, newMaxAlpha = imgui.slider_float("Maximum Pulse Alpha", config.IndicatorMaxPulseAlpha or 1.0, 0.0, 1.0)
+                if changedMaxAlpha then
+                    config.IndicatorMaxPulseAlpha = newMaxAlpha
+                    save_config()
+                    load_config()
+                end
+
+                local changedGrowth, newGrowth = imgui.slider_int("Pulse Growth", config.IndicatorPulseGrowth or 0, 0, 50)
+                if changedGrowth then
+                    config.IndicatorPulseGrowth = newGrowth
+                    save_config()
+                    load_config()
+                end
+            end
+
+            if imgui.checkbox("Fade On Success", config.IndicatorShouldFade) then
+                config.IndicatorShouldFade = not config.IndicatorShouldFade
+                save_config()
+                load_config()
+            end
+
+            if config.IndicatorShouldFade then
+                local changedFade, newFade = imgui.slider_float("Fade Duration (s)", config.IndicatorFadeDuration or 0.5, 0.1, 5.0)
+                if changedFade then
+                    config.IndicatorFadeDuration = newFade
+                    save_config()
+                    load_config()
+                end
+            end
+
+            local changedPending, newPending = imgui.color_picker("Pending Color", config.IndicatorColorPending)
+            if changedPending then
+                config.IndicatorColorPending = newPending
+                save_config()
+                load_config()
+            end
+
+            local changedSuccess, newSuccess = imgui.color_picker("Success Color", config.IndicatorColorSuccess)
+            if changedSuccess then
+                config.IndicatorColorSuccess = newSuccess
+                save_config()
+                load_config()
+            end
         end
         imgui.tree_pop()
     end
 end)
-
-
---[[
---Todo
-local function cancelUseItemFocus(retval)
-    if retval == nil then return end
-    local isAim = (sdk.to_int64(retval) & 1)
-  
-    if isAim == 1 then
-        setItemSuccess()
-    end
-end
-
--- Focus
-if type_HunterCharacter then
-    sdk.hook(type_HunterCharacter:get_method("changeActionRequest(app.AppActionDef.LAYER, ace.ACTION_ID, System.Boolean)"), cancelUseItemFocus, nil)
-end
-
-local function get_IsAim(retval)
-    local hunter = sdk.get_managed_singleton("app.PlayerManager"):getMasterPlayer():get_ContextHolder():get_Hunter()
-    is_aim = hunter:get_IsAim()
-    if is_aim == true then
-        setItemSuccess()
-    end
-end
-
-local function cancelUseItemFocus(args)
-    local actionID = sdk.to_int64(args[4])
-    -- 4835046936 focus
-    if actionID == 4835046936 then
-        setItemSuccess()
-    end
-end
-
-]]
-
---
-
-
-
---[[
--- Visual indicator
-local alpha_time = 0.0
-local last_time = os.clock()
-
-local fade_out_time = 0.0
-local fade_out_duration = 0.5
-local was_item_success = false
-local fading_out = false
-
-re.on_frame(function()
-    local current_time = os.clock()
-    local dt = current_time - last_time
-    last_time = current_time
-    if instance ~= nil then
-        if itemSuccess == false then
-            -- Reset fade state
-            fade_out_time = 0.0
-            fading_out = false
-
-            -- Animate alpha pulse
-            alpha_time = alpha_time + dt
-            local alpha = (math.sin(alpha_time * 2.0 * math.pi) + 1.0) / 2.0
-            local alpha_byte = math.floor(alpha * 255)
-
-            -- White pulsating
-            local color = (alpha_byte << 24) | 0xFFFFFF
-            draw.text("Action queued", 400, 300, color)
-        else
-            -- On first transition to true
-            if not was_item_success then
-                fade_out_time = 0.0
-                fading_out = true
-            end
-
-            -- Handle fading out green
-            if fading_out and fade_out_time <= fade_out_duration then
-                fade_out_time = fade_out_time + dt
-                local t = fade_out_time / fade_out_duration
-                local alpha = 1.0 - math.min(t, 1.0)
-                local alpha_byte = math.floor(alpha * 255)
-
-                -- Green fade
-                local color = (alpha_byte << 24) | 0x00FF00
-                draw.text("Action queued", 400, 300, color)
-            end
-        end
-
-        -- Track state change
-        was_item_success = itemSuccess
-    end
-end)
-]]
