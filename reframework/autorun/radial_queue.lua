@@ -1,10 +1,10 @@
 -- @Author taakefyrsten
 -- https://next.nexusmods.com/profile/taakefyrsten
 -- https://github.com/jwlei/radial_queue
--- Version 1.6
+-- Version 1.7
 
 -- INIT ------------------------------------
-local debug_flag = false
+local debug_flag = true
 local instance = nil
 local itemSuccess = nil
 local cancelCount = 0
@@ -459,6 +459,8 @@ if config.Enable == true then
     -- Stamp
     if type_ChatManager then
         sdk.hook(type_ChatManager:get_method("sendStamp"), cancelUseItem, nil)
+        sdk.hook(type_ChatManager:get_method("sendFreeText"), cancelUseItem, nil)
+        sdk.hook(type_ChatManager:get_method("sendManualText"), cancelUseItem, nil)
     end
 
     -- Slinger reload
