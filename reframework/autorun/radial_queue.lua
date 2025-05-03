@@ -1,10 +1,10 @@
 -- @Author taakefyrsten
 -- https://next.nexusmods.com/profile/taakefyrsten
 -- https://github.com/jwlei/radial_queue
--- Version 2.0
+-- Version 1.9
 
 -- INIT ------------------------------------
-local debug_flag = false
+local debug_flag = true
 local instance = nil
 local itemSuccess = nil
 local cancelCount = 0
@@ -41,6 +41,8 @@ local type_WpCommonSubAction = sdk.find_type_definition("app.WpCommonSubAction.c
 local type_PlayerCommonSubActionUseSlingerItem = sdk.find_type_definition("app.PlayerCommonSubAction.cUseSlingerItem")
 local type_mcOtomoCommunicator = sdk.find_type_definition("app.mcOtomoCommunicator")
 local type_cCallPorter = sdk.find_type_definition("app.PlayerCommonSubAction.cCallPorter")
+local type_cPorterDismountBase = sdk.find_type_definition("app.PlayerCommonAction.cPorterDismountBase")
+local type_cPorterDismountJumpOff = sdk.find_type_definition("app.PlayerCommonAction.cPorterDismountJumpOff")
 local type_mcHunterBonfire = sdk.find_type_definition("app.mcHunterBonfire")
 local type_mcHunterFishing = sdk.find_type_definition("app.mcHunterFishing")
 local type_PauseManagerBase = sdk.find_type_definition("ace.PauseManagerBase")
@@ -189,26 +191,8 @@ local function setInputSource(instance)
     end
 end
 
-local function saveItem(args)
-    if config.Enable == false then 
-        return 
-    end
-    
-    instance = sdk.to_managed_object(args[2])
-    setInputSource(instance)
-
-    if sourceInput == 100 then
-        GUI020600_itemIndex_current = tonumber(string.sub(string.gsub(tostring(args[3]), "userdata: ", ""), -2))
-    end
-    
-    if executing == false then
-        debug("Action saved")
-    end
-
-    itemSuccess = false
-    shouldSkipPad = true
-    executing = true
-    --DodgePersistCount = 0
+local function getItemId(args)
+    return tonumber(string.sub(string.gsub(tostring(args), "userdata: ", ""), -2), 16)
 end
 
 local function setItemSuccess()
@@ -223,24 +207,37 @@ local function setItemSuccess()
 end
 
 local function cancelUseItem(args)
-    --[[
-    -- Test and check for chat manager to not interrupt queue
-    local testX = sdk.to_managed_object(args[2])
-        debug(testX:get_type_definition())
-        debug(type_ChatManager)
-    ]]
-    
-
     if itemSuccess == false then
         setItemSuccess()
     end
 end
 
+local function saveItem(args)
+    if config.Enable == false then 
+        return 
+    end
+    
+    instance = sdk.to_managed_object(args[2])
+    setInputSource(instance)
+
+
+    if sourceInput == 100 then
+        GUI020600_itemIndex_current = getItemId(args[3])
+    end
+    
+    if executing == false then
+        debug("Action saved")
+    end
+
+    itemSuccess = false
+    shouldSkipPad = true
+    executing = true
+    --DodgePersistCount = 0
+end
+
 local function getHunterCharacter() 
     local Player = sdk.get_managed_singleton("app.PlayerManager"):get_field("_PlayerList")[0]
 
-    --local MasterPlayer = Player:call("getMasterPlayer")
-    --debug(MasterPlayer)
 	if Player == nil then 
 		return 
 	end
@@ -319,10 +316,10 @@ local function checkItemIDforCancel(args)
         return
     end
 
-    local itemId = string.gsub(tostring(args[2]), "userdata: ", "") -- remove the prefix
-   
-    if     itemId == "0000000000000001" --Potion
-        or itemId == "0000000000000002" --Mega Potion
+    local itemId = getItemId(args[2])
+    
+    if     itemId == 1 --Potion
+        or itemId == 2 --Mega Potion
     then
         cancelCount = cancelCount + 1
     end
@@ -341,7 +338,7 @@ local function tryUseItem(args)
     
     --debug(itemSuccess)
     if itemSuccess == false then
-        if sourceInput == 100 then
+        if sourceInput == 100 and GUI020600_itemIndex_current ~= nil then
             instance:call('execute(System.Int32)', GUI020600_itemIndex_current)
         elseif sourceInput == 55 then
             instance:call('useActiveItem(System.Boolean)', nil)
@@ -389,6 +386,15 @@ local function cancelTriggerSeikret(args)
 
     if isMasterPlayer:get_IsMaster() == true then
         debug("CANCELLED BY MASTERPLAYER SEIKRET")
+        setItemSuccess()
+    end
+end
+
+local function cancelTriggerSeikretDismount(args)
+    local isMasterPlayer = sdk.to_managed_object(args[2]):get_field("<Chara>k__BackingField")
+
+    if isMasterPlayer:get_IsMaster() == true then
+        debug("CANCELLED BY MASTERPLAYER SEIKRET DISMOUNT BASE")
         setItemSuccess()
     end
 end
@@ -454,7 +460,21 @@ local function cancelTriggerForce(args)
 end
 
 local function cancelTriggerAmmoCrafting(args)
-    local recipeIndex = tonumber(string.sub(string.gsub(tostring(sdk.to_managed_object(args[2]):get_field("<Recipe>k__BackingField"):get_field("_Index")), "userdata: ", ""), -2))
+    local managedObject = sdk.to_managed_object(args[2])
+    if not managedObject then return end
+
+    local indexObject = managedObject:get_field("_Index")
+    if not indexObject then return end
+
+    local indexField = indexObject:get_field("<Recipe>k__BackingField")
+    if not indexField then return end
+
+    if indexField == nil then
+        return
+    end
+
+    local recipeIndex = getItemId(indexField)
+
     if recipeIndex ~= nil and recipeIndex >= 46 and recipeIndex <= 65 then
         debug("CANCELLED BY cancelTriggerAmmoCrafting")
         itemSuccess = false
@@ -619,6 +639,15 @@ if config.Enable == true then
             sdk.hook(type_cCallPorter:get_method("doCall"), cancelTriggerSeikret, nil)
         end
 
+        -- Porter dismount
+        if type_cPorterDismountBase then
+            sdk.hook(type_cPorterDismountBase:get_method("doEnter"), cancelTriggerSeikretDismount, nil)
+        end
+
+        if type_cPorterDismountJumpOff then
+            sdk.hook(type_cPorterDismountJumpOff:get_method("doEnter"), cancelTriggerSeikretDismount, nil)
+        end
+
         -- Guarding
         local type_Wp00 = sdk.find_type_definition("app.Wp00Action.cGuard")
         if type_Wp00 then
@@ -732,6 +761,9 @@ re.on_draw_ui(function()
         end
 
         if config.Enable then
+     
+            imgui.text(" ")
+
             if imgui.checkbox("Enable combat reset timer", config.EnableCombatTimer) then
                 config.EnableCombatTimer = not config.EnableCombatTimer
                 save_config()
@@ -788,6 +820,8 @@ re.on_draw_ui(function()
             ]]
         end
 
+        imgui.text(" ")
+
         if imgui.checkbox("Enable Indicator", config.IndicatorEnable) then
             config.IndicatorEnable = not config.IndicatorEnable
             save_config()
@@ -801,14 +835,14 @@ re.on_draw_ui(function()
                 load_config()
             end
 
-            local changedX, newX = imgui.slider_int("Position X", config.IndicatorPosX or 400, 0, 3840)
+            local changedX, newX = imgui.slider_int("Position X", config.IndicatorPosX or 720, 0, 3840)
             if changedX then
                 config.IndicatorPosX = newX
                 save_config()
                 load_config()
             end
 
-            local changedY, newY = imgui.slider_int("Position Y", config.IndicatorPosY or 300, 0, 2160)
+            local changedY, newY = imgui.slider_int("Position Y", config.IndicatorPosY or 100, 0, 2160)
             if changedY then
                 config.IndicatorPosY = newY
                 save_config()
