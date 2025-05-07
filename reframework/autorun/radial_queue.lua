@@ -1,7 +1,7 @@
 -- @Author taakefyrsten
 -- https://next.nexusmods.com/profile/taakefyrsten
 -- https://github.com/jwlei/radial_queue
--- Version 1.9
+-- Version 1.9v3
 
 -- INIT ------------------------------------
 local debug_flag = true
@@ -50,6 +50,7 @@ local type_PhotoCameraController = sdk.find_type_definition("app.PhotoCameraCont
 local type_cGUIMapController = sdk.find_type_definition("app.cGUIMapController")
 local type_cSougankyo = sdk.find_type_definition("app.CameraSubAction.cSougankyo")
 local type_ItemRecipeUtil = sdk.find_type_definition("app.ItemRecipeUtil")
+local type_Hit = sdk.find_type_definition("app.Hit")
 -- SETTINGS --------------------------------
 
 local config = {
@@ -341,7 +342,7 @@ local function checkCraftAllorOne(args)
 
     if itemAmount == 1 then
         if sourceInput == 100 then
-            swetItemSuccess()
+            setItemSuccess()
         elseif sourceInput == 55 then
             setIsCraftingTrue()
             craftingCount = craftingCount + 1
@@ -492,6 +493,17 @@ local function cancelTriggerAttack(args)
     end
 end
 
+local function cancelTriggerReceivedHit(args)
+    local hitObj = sdk.to_managed_object(args[3]):get_field("<DamageHit>k__BackingField")
+    local damageReceiver = hitObj:get_field("_Owner"):get_Name()
+    if damageReceiver == nil then return end
+
+    if damageReceiver == "MasterPlayer" then
+       debug("CANCELLED BY MASTERPLAYER HIT RECEIVED")
+        setItemSuccess()
+    end
+end
+
 local function cancelTriggerDodge(args)
     local obj_hunterBadconditionsHunterCharacter = sdk.to_managed_object(args[3])
     
@@ -567,6 +579,7 @@ local function cancelTriggerBonfire(args)
 end
 
 local function cancelTriggerFishing(args)
+
     local isMasterPlayer = sdk.to_managed_object(args[2]):get_field("Chara")
     if isMasterPlayer:get_IsMaster() == true then
        debug("CANCELLED BY MASTERPLAYER FISHING")
@@ -579,27 +592,6 @@ local function cancelTriggerForce(args)
     itemSuccess = false
     setItemSuccess()
 end
-
---[[
-local function cancelTriggerAmmoCrafting(args)
-    local managedObject = sdk.to_managed_object(args[2])
-    if not managedObject then return end
-
-    local indexField = managedObject:get_field("_Index")
-    if indexField == nil then return end
-
-    local recipeIndex = getItemId(indexField)
-
-    if recipeIndex ~= nil and recipeIndex >= 46 and recipeIndex <= 65 then
-        debug("cancelTriggerAmmoCrafting")
-        itemSuccess = false
-        setItemSuccess()
-    end
-end
-]]
-
-
-
 
 
 -- Indicator ------------------------------------
@@ -709,6 +701,10 @@ if config.Enable == true then
 
     if type_GUI020008PartsRotateFrame then
         sdk.hook(type_GUI020008PartsRotateFrame:get_method("updateItem"), cancelTriggerGUI020008UpdateItem, nil)
+    end
+
+    if type_Hit then
+        sdk.hook(type_Hit:get_method("callHitReturnEvent(System.Delegate[], app.HitInfo)"), cancelTriggerReceivedHit, nil)
     end
 
     -- Save item from M+KB
