@@ -1,10 +1,10 @@
 -- @Author taakefyrsten
 -- https://next.nexusmods.com/profile/taakefyrsten
 -- https://github.com/jwlei/radial_queue
--- Version 1.9v4
+-- Version 2.0
 
 -- INIT ------------------------------------
-local debug_flag = true
+local debug_flag = false
 local instance = nil
 local itemSuccess = nil
 local cancelCount = 0
@@ -15,7 +15,6 @@ local HunterCharacter = nil
 local loadedTable = nil
 local sourceInput = nil
 local GUI020600_itemIndex_current = nil
-local craftingCount = 0
 local craftingItemId = nil
 local isCrafting = false
 local isCraftingRecipeOnly = nil
@@ -26,9 +25,7 @@ local shortcutIdRecipes = {}
 --app.GUI020007 Radial M+KB
 local type_GUI020006 = sdk.find_type_definition("app.GUI020006") -- Item bar
 local type_GUI020008 = sdk.find_type_definition("app.GUI020008") -- Radial Menu
-local type_GUI020008PartsRotateFrame = sdk.find_type_definition("app.GUI020008PartsRotateFrame") -- Radial Menu 2
 local type_GUI020600 = sdk.find_type_definition("app.GUI020600") -- M+KB item select
-local type_GUI020600PartsFrame = sdk.find_type_definition("app.GUI020600PartsFrame") -- M+KB item select 2
 local type_GUI030208 = sdk.find_type_definition("app.GUI030208") -- Radial customization
 local type_GUI040000 = sdk.find_type_definition("app.GUI040000") -- Member list
 local type_GUI040002 = sdk.find_type_definition("app.GUI040002") -- Invitation list
@@ -206,6 +203,7 @@ local function setItemSuccess()
        sourceInput = nil 
        GUI020600_itemIndex_current = nil
        instance = nil
+       isCrafting = false
        isCraftingRecipeOnly = nil
        cShortcutObj = nil
        shortcutIdRecipes = {}
@@ -216,16 +214,6 @@ local function cancelUseItem()
     if itemSuccess == false then
         setItemSuccess()
     end
-end
-
-local function setIsCraftingTrue()
-    isCrafting = true
-end
-
-local function setIsCraftingFalse()
-    isCrafting = false
-    craftingCount = 0
-    debug("ISCRAFTING SET TO FALSE")
 end
 
 local function getHunterCharacter() 
@@ -348,21 +336,12 @@ local function checkCraftAllorOne(args)
     local itemAmount = sdk.to_int64(args[4])
     if not itemAmount then return end
     
+    isCrafting = true
     craftingItemId = sdk.to_managed_object(args[2]):get_field("_ResultItem")
     craftingItemId = craftingItemId - 1
     debug("checkCraftAllorOneId: " .. tostring(craftingItemId))
-    if itemAmount == 1 then
-        if sourceInput == 100 then
-            setItemSuccess()
-        elseif sourceInput == 55 then
-            setIsCraftingTrue()
-            
-            craftingCount = craftingCount + 1
-        else
-            return
-        end
-        
-    elseif itemAmount >= 2 then
+   
+    if itemAmount >= 2 then
         debug("ITEM SUCCESS FROM checkCraftAllorOne")
         setItemSuccess()
     else
@@ -380,140 +359,31 @@ local function cShortcutFunc(args)
         cShortcutObj = sdk.to_managed_object(args[2])
     end
     if cShortcutObj == nil then return end
-    debug("cShortcutFunc -- Found matching shortcut")
     
     local cShortcutItemId = cShortcutObj:get_field("<ItemId>k__BackingField")
     local cShortcutRecipe = cShortcutObj:get_field("<RecipeId>k__BackingField")
-    debug("updateShortcutItemId: " .. tostring(cShortcutItemId))
-    debug("updateShortcutRecipe: " .. tostring(cShortcutRecipe))
+
     updateShortcutTable(shortcutIdRecipes, cShortcutRecipe)
 end
 
 local function updateShortcut(retval)
     cShortcutObj:call("update()")
-
 end
-
-
-local craftingCountsByFrame = {}
-local function cancelTriggerGUI020008UpdateItem(args)
-    if instance == nil then
-        return
-    end
-    
-    if craftingItemId == nil then return end
-    local obj_GUI020008PRR = nil
-    if sdk.to_managed_object(args[2]):get_field("<_ShortcutElement>k__BackingField"):get_field("<_Selected>k__BackingField") == true then
-        obj_GUI020008PRR = sdk.to_managed_object(args[2])
-    end
-    if obj_GUI020008PRR == nil then return end
-
-    local shortcutElement = obj_GUI020008PRR:get_field("<_ShortcutElement>k__BackingField")
-    if shortcutElement == nil then return end
-
-    local itemId = shortcutElement:get_field("<ItemId>k__BackingField")
-    if craftingItemId - 1 ~= itemId then return end
-
-    local isSelected = shortcutElement:get_field("<_Selected>k__BackingField")
-    if isSelected == false then return end
-
-    local num = shortcutElement:get_field("<Num>k__BackingField")
-    local frameIndex = obj_GUI020008PRR:get_field("<FrameIndex>k__BackingField")
-
-    if craftingCountsByFrame[frameIndex] == nil then
-        craftingCountsByFrame[frameIndex] = 0
-    end
-
-    local currentCount = craftingCountsByFrame[frameIndex]
-
-    instance:call("updateShortcut()")
-
-
-    if (num == 0 or num == nil) and currentCount == 0 then
-        craftingCountsByFrame[frameIndex] = 1
-    elseif (num == 0 or num == nil) and currentCount >= 1 then
-        isCraftingRecipeOnly = true
-        setItemSuccess()
-        --instance = nil
-        debug("FrameIndex - count [" .. tostring(frameIndex) .. "]: " .. tostring(currentCount))
-        craftingCountsByFrame[frameIndex] = 0
-        craftingItemId = nil
-    else
-        isCraftingRecipeOnly = false
-    end
-end
-
-local function cancelTriggerGUI0020600UpdateItem(args)
-    if instance == nil then
-        return
-    end
-    if craftingItemId == nil then return end
-    local obj_GUI020600PR = nil
-    if sdk.to_managed_object(args[2]):get_field("<_ShortcutElement>k__BackingField"):get_field("<_Selected>k__BackingField") == true then
-        obj_GUI020600PR = sdk.to_managed_object(args[2])
-    end
-    if obj_GUI020600PR == nil then return end
-
-    local shortcutElement = obj_GUI020600PR:get_field("<_ShortcutElement>k__BackingField")
-    if shortcutElement == nil then return end
-
-    local itemId = shortcutElement:get_field("<ItemId>k__BackingField")
-    if craftingItemId - 1 ~= itemId then return end
-
-    local isSelected = shortcutElement:get_field("<_Selected>k__BackingField")
-    if isSelected == false then return end
-
-    local num = shortcutElement:get_field("<Num>k__BackingField")
-    local frameIndex = obj_GUI020600PR:get_field("<FrameIndex>k__BackingField")
-
-    if craftingCountsByFrame[frameIndex] == nil then
-        craftingCountsByFrame[frameIndex] = 0
-    end
-
-    local currentCount = craftingCountsByFrame[frameIndex]
-
-    --instance:call("onHudClose()")
-    --instance:call("guiHudVisibleUpdate()")
-
-
-    if (num == 0 or num == nil) and currentCount == 0 then
-        craftingCountsByFrame[frameIndex] = 1
-    elseif (num == 0 or num == nil) and currentCount >= 1 then
-        setItemSuccess()
-        debug("FrameIndex - count [" .. tostring(frameIndex) .. "]: " .. tostring(currentCount))
-        craftingCountsByFrame[frameIndex] = 0
-        craftingItemId = nil
-    else
-        return
-    end
-end
-
 
 local function tryUseItem(args)
     if instance == nil then
         return
     end
 
-    local currentTime = os.clock()
-    --if currentTime - savedItemTime < 0.5 then
-    --    return -- Skip if called too soon
-    --end
-
-    savedItemTime = currentTime
-
     if sourceInput == 55 then
         instance:call("updateShortcut()")
     end
-    cShortcutObj:call("update()")
-    checkIfTimerCancel()
-
-    
-    if isCrafting then
-        debug("tryUseItem - isCrafting")
-        return 
+    if cShortcutObj ~= nil then
+        cShortcutObj:call("update()")
     end
+    checkIfTimerCancel()
     
- 
+
     local anyActualItem = false
     if shortcutIdRecipes ~= nil then
         for _, recipe in ipairs(shortcutIdRecipes) do
@@ -526,9 +396,9 @@ local function tryUseItem(args)
         debug("shortcutIdRecipes is nil")
     end
 
-    if anyActualItem == true then
+    if (anyActualItem == true and isCrafting == true) or (anyActualItem == false and isCrafting == false) then
         debug("tryUseItem - anyActualItem - MATCH -1")
-        if itemSuccess == false and isCrafting == false then
+        if itemSuccess == false then
             debug("tryUseItem - Executing")
             if sourceInput == 100 and GUI020600_itemIndex_current ~= nil then
                 instance:call('execute(System.Int32)', GUI020600_itemIndex_current)
@@ -544,8 +414,6 @@ local function tryUseItem(args)
         debug("tryUseItem - anyActualItem - NO MATCH, ONLY RECIPES")
         setItemSuccess()
     end
-
-    
 end
 
 local function cancelTriggerAttack(args) 
@@ -698,7 +566,7 @@ re.on_frame(function()
         -- Animate pulse
         alpha_time = alpha_time + dt
 
-        local pulse_speed = config.IndicatorPulseSpeed or 1.0  -- Default to 1.0 if unset
+        local pulse_speed = config.IndicatorPulseSpeed or 1.0
         local sine = (math.sin(alpha_time * 2.0 * math.pi * pulse_speed) + 1.0) / 2.0
 
         -- Visual alpha (fade from min_alpha to 1)
@@ -742,7 +610,6 @@ re.on_frame(function()
             draw_indicator_circle(x, y, radius, color)
 
         elseif not config.IndicatorShouldFade then
-            -- No fade, just draw static green
             draw_indicator_circle(x, y, base_radius, config.IndicatorColorSuccess)
         end
     end
@@ -758,11 +625,6 @@ if config.Enable == true then
     if type_GUI020008 then
         sdk.hook(type_GUI020008:get_method('onOpenApp'), cancelUseItem, function(retval) debug("Canceled by type_GUI020008") end)
         sdk.hook(type_GUI020008:get_method("useActiveItem"), saveItem, nil)
-        sdk.hook(type_GUI020008:get_method("callbackPouchChange(app.ItemDef.ID)"), setIsCraftingFalse, nil)
-    end
-
-    if type_GUI020008PartsRotateFrame then
-        --sdk.hook(type_GUI020008PartsRotateFrame:get_method("updateItem"), cancelTriggerGUI020008UpdateItem, nil)
     end
 
     if type_Hit then
@@ -772,11 +634,7 @@ if config.Enable == true then
     -- Save item from M+KB
     if type_GUI020600 then
         sdk.hook(type_GUI020600:get_method("execute"), saveItem, nil)
-        --sdk.hook(type_GUI020600:get_method("requestOpenCraftWindow"), setIsCraftingTrue, nil)
-    end
-
-    if type_GUI020600PartsFrame then
-        --sdk.hook(type_GUI020600PartsFrame:get_method("updateItem"), cancelTriggerGUI0020600UpdateItem, nil)
+        sdk.hook(type_GUI020600:get_method("onHudClose"), cancelUseItem, nil)
     end
 
     -- Retry item Use
