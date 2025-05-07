@@ -11,33 +11,33 @@ local cancelCount = 0
 --local cancelCountDodge = 0
 local shouldSkipPad = true
 local resetTime = nil
-local executing = false
 local HunterCharacter = nil
 local loadedTable = nil
 local sourceInput = nil
 local GUI020600_itemIndex_current = nil
+local craftingCount = 0
+local craftingItemId = nil
+local isCrafting = false
 
 --app.GUI020006.requestOpenItemSlider Item bar
 --app.GUI020007 Radial M+KB
 local type_GUI020006 = sdk.find_type_definition("app.GUI020006") -- Item bar
 local type_GUI020008 = sdk.find_type_definition("app.GUI020008") -- Radial Menu
+local type_GUI020008PartsRotateFrame = sdk.find_type_definition("app.GUI020008PartsRotateFrame") -- Radial Menu 2
 local type_GUI020600 = sdk.find_type_definition("app.GUI020600") -- M+KB item select
+local type_GUI020600PartsFrame = sdk.find_type_definition("app.GUI020600PartsFrame") -- M+KB item select 2
 local type_GUI030208 = sdk.find_type_definition("app.GUI030208") -- Radial customization
 local type_GUI040000 = sdk.find_type_definition("app.GUI040000") -- Member list
 local type_GUI040002 = sdk.find_type_definition("app.GUI040002") -- Invitation list
 local type_cGUI060000 = sdk.find_type_definition("app.cGUI060000Sign.cMapPlayerSign") -- Mini map ping
 local type_ChatLogCommunication = sdk.find_type_definition("app.GUIFlowChatLogCommunication") -- Chat log
-local type_cGUIPartsShortcutFrameBase = sdk.find_type_definition("app.cGUIPartsShortcutFrameBase")
 local type_HunterExtendBase = sdk.find_type_definition("app.HunterCharacter.cHunterExtendBase")
 local type_PlayerManager = sdk.find_type_definition("app.PlayerManager")
 local type_cHunterBadConditions = sdk.find_type_definition("app.HunterBadConditions.cHunterBadConditions")
 local type_Weapon = sdk.find_type_definition("app.Weapon")
-local type_PlayerUtil = sdk.find_type_definition("app.PlayerUtil")
 local type_cGUIShortcutPadControl = sdk.find_type_definition("app.cGUIShortcutPadControl")
 local type_HunterItemActionTable = sdk.find_type_definition("app.HunterItemActionTable")
 local type_ChatManager = sdk.find_type_definition("app.ChatManager")
-local type_HunterCharacter = sdk.find_type_definition("app.HunterCharacter")
-local type_WpCommonSubAction = sdk.find_type_definition("app.WpCommonSubAction.cAimStart")
 local type_PlayerCommonSubActionUseSlingerItem = sdk.find_type_definition("app.PlayerCommonSubAction.cUseSlingerItem")
 local type_mcOtomoCommunicator = sdk.find_type_definition("app.mcOtomoCommunicator")
 local type_cCallPorter = sdk.find_type_definition("app.PlayerCommonSubAction.cCallPorter")
@@ -49,8 +49,7 @@ local type_PauseManagerBase = sdk.find_type_definition("ace.PauseManagerBase")
 local type_PhotoCameraController = sdk.find_type_definition("app.PhotoCameraController")
 local type_cGUIMapController = sdk.find_type_definition("app.cGUIMapController")
 local type_cSougankyo = sdk.find_type_definition("app.CameraSubAction.cSougankyo")
-local type_cGUIItemCraft = sdk.find_type_definition("app.cGUIItemCraft")
-
+local type_ItemRecipeUtil = sdk.find_type_definition("app.ItemRecipeUtil")
 -- SETTINGS --------------------------------
 
 local config = {
@@ -83,7 +82,6 @@ local function debug(msg)
         print('[RQ]' .. '[' .. timestamp .. ']'.. '[DEBUG] ' .. tostring(msg))
     end
 end
-
 
 local function save_config()
     json.dump_file("radial_queue.json", config)
@@ -184,8 +182,9 @@ local function setInputSource(instance)
     if instance == nil then
         return
     end
-    --ID 100 for M+KB, 55 for Radial
+      --ID 100 for M+KB, 55 for Radial
     sourceInput = instance:get_field("_PartsOwnerAccessor"):get_field("_Owner"):get_ID()
+  
     if sourceInput == nil then
         return
     end
@@ -196,43 +195,28 @@ local function getItemId(args)
 end
 
 local function setItemSuccess()
-       debug("Action cancelled or finished")
        itemSuccess = true
        resetTime = nil
-       executing = false
        cancelCount = 0
        sourceInput = nil 
        GUI020600_itemIndex_current = nil
+       instance = nil
        --cancelCountDodge = 0
 end
 
-local function cancelUseItem(args)
+local function cancelUseItem()
     if itemSuccess == false then
         setItemSuccess()
     end
 end
 
-local function saveItem(args)
-    if config.Enable == false then 
-        return 
-    end
-    
-    instance = sdk.to_managed_object(args[2])
-    setInputSource(instance)
+local function setIsCraftingTrue()
+    isCrafting = true
+end
 
-
-    if sourceInput == 100 then
-        GUI020600_itemIndex_current = getItemId(args[3])
-    end
-    
-    if executing == false then
-        debug("Action saved")
-    end
-
-    itemSuccess = false
-    shouldSkipPad = true
-    executing = true
-    --DodgePersistCount = 0
+local function setIsCraftingFalse()
+    isCrafting = false
+    craftingCount = 0
 end
 
 local function getHunterCharacter() 
@@ -250,7 +234,6 @@ local function getHunterCharacter()
     return HunterCharacter
 end
 
--- Misc
 local function getHunterCharacterCombat()
     HunterCharacter = getHunterCharacter()
 
@@ -273,11 +256,8 @@ local function startTimer()
 
         if getHunterCharacterCombat() == true and config.EnableCombatTimer == true then
             resetTime = os.time() + config.ResetTimerCombat
-            debug("Timer COMBAT started, " .. config.ResetTimerCombat .. "s")
-
         elseif getHunterCharacterCombat() == false and config.EnableNoCombatTimer == true then
             resetTime = os.time() + config.ResetTimerNoCombat
-            debug("Timer NO COMBAT started, " .. config.ResetTimerNoCombat .. "s")
         else
             return
         end
@@ -292,8 +272,8 @@ local function checkIfTimerCancel()
 
        local currentTime = os.time()
        if resetTime ~= nil and currentTime >= resetTime then
-           debug("Timer expired")
            setItemSuccess()
+           debug("setItemSuccess() from timer")
            resetTime = nil
        end
     end
@@ -311,11 +291,13 @@ local function skipPadInput(args)
     end
 end
 
+
+
 local function checkItemIDforCancel(args)
     if args == nil then
         return
     end
-
+    -- Todo, check hunter health if should cancel
     local itemId = getItemId(args[2])
     
     if     itemId == 1 --Potion
@@ -326,17 +308,168 @@ local function checkItemIDforCancel(args)
 
     if cancelCount >= 1 then
         setItemSuccess()
+        debug("setItemSuccess() from checkItemIDforCancel")
     end
 end
+
+local function saveItem(args)
+    
+    debug("saveItem")
+    if config.Enable == false then 
+        return 
+    end
+
+    instance = sdk.to_managed_object(args[2])
+    setInputSource(instance)
+
+    if sourceInput == 100 then
+        GUI020600_itemIndex_current = getItemId(args[3])
+    end
+
+    itemSuccess = false
+    shouldSkipPad = true
+    --DodgePersistCount = 0
+end
+
+local function checkCraftAllorOne(args)
+    debug("checkCraft")
+    
+    local itemAmount = sdk.to_int64(args[4])
+    if not itemAmount then return end
+
+    craftingItemId = sdk.to_managed_object(args[2]):get_field("_ResultItem")
+
+    if itemAmount == 1 then
+        if sourceInput == 100 then
+            swetItemSuccess()
+        elseif sourceInput == 55 then
+            setIsCraftingTrue()
+            craftingCount = craftingCount + 1
+        else
+            return
+        end
+        
+    elseif itemAmount >= 2 then
+        debug("ITEM SUCCESS FROM checkCraftAllorOne")
+        setItemSuccess()
+    else
+        return
+    end  
+end
+
+
+local craftingCountsByFrame = {}
+local function cancelTriggerGUI020008UpdateItem(args)
+    if instance == nil then
+        return
+    end
+    if craftingItemId == nil then return end
+    local obj_GUI020008PRR = nil
+    if sdk.to_managed_object(args[2]):get_field("<_ShortcutElement>k__BackingField"):get_field("<_Selected>k__BackingField") == true then
+        obj_GUI020008PRR = sdk.to_managed_object(args[2])
+    end
+    if obj_GUI020008PRR == nil then return end
+
+    local shortcutElement = obj_GUI020008PRR:get_field("<_ShortcutElement>k__BackingField")
+    if shortcutElement == nil then return end
+
+    local itemId = shortcutElement:get_field("<ItemId>k__BackingField")
+    if craftingItemId - 1 ~= itemId then return end
+
+    local isSelected = shortcutElement:get_field("<_Selected>k__BackingField")
+    if isSelected == false then return end
+
+    local num = shortcutElement:get_field("<Num>k__BackingField")
+    local frameIndex = obj_GUI020008PRR:get_field("<FrameIndex>k__BackingField")
+
+    if craftingCountsByFrame[frameIndex] == nil then
+        craftingCountsByFrame[frameIndex] = 0
+    end
+
+    local currentCount = craftingCountsByFrame[frameIndex]
+
+    instance:call("updateShortcut()")
+
+
+    if (num == 0 or num == nil) and currentCount == 0 then
+        craftingCountsByFrame[frameIndex] = 1
+    elseif (num == 0 or num == nil) and currentCount >= 1 then
+        setItemSuccess()
+        debug("FrameIndex - count [" .. tostring(frameIndex) .. "]: " .. tostring(currentCount))
+        craftingCountsByFrame[frameIndex] = 0
+        craftingItemId = nil
+    else
+        return
+    end
+end
+
+local function cancelTriggerGUI0020600UpdateItem(args)
+    if instance == nil then
+        return
+    end
+    if craftingItemId == nil then return end
+    local obj_GUI020600PR = nil
+    if sdk.to_managed_object(args[2]):get_field("<_ShortcutElement>k__BackingField"):get_field("<_Selected>k__BackingField") == true then
+        obj_GUI020600PR = sdk.to_managed_object(args[2])
+    end
+    if obj_GUI020600PR == nil then return end
+
+    local shortcutElement = obj_GUI020600PR:get_field("<_ShortcutElement>k__BackingField")
+    if shortcutElement == nil then return end
+
+    local itemId = shortcutElement:get_field("<ItemId>k__BackingField")
+    if craftingItemId - 1 ~= itemId then return end
+
+    local isSelected = shortcutElement:get_field("<_Selected>k__BackingField")
+    if isSelected == false then return end
+
+    local num = shortcutElement:get_field("<Num>k__BackingField")
+    local frameIndex = obj_GUI020600PR:get_field("<FrameIndex>k__BackingField")
+
+    if craftingCountsByFrame[frameIndex] == nil then
+        craftingCountsByFrame[frameIndex] = 0
+    end
+
+    local currentCount = craftingCountsByFrame[frameIndex]
+
+    --instance:call("onHudClose()")
+    --instance:call("guiHudVisibleUpdate()")
+
+
+    if (num == 0 or num == nil) and currentCount == 0 then
+        craftingCountsByFrame[frameIndex] = 1
+    elseif (num == 0 or num == nil) and currentCount >= 1 then
+        setItemSuccess()
+        debug("FrameIndex - count [" .. tostring(frameIndex) .. "]: " .. tostring(currentCount))
+        craftingCountsByFrame[frameIndex] = 0
+        craftingItemId = nil
+    else
+        return
+    end
+end
+
 
 local function tryUseItem(args)
     if instance == nil then
         return
     end
-
-    checkIfTimerCancel()
     
-    --debug(itemSuccess)
+    checkIfTimerCancel()
+
+    if isCrafting then
+        if sourceInput == 100 then
+        --logic
+        elseif sourceInput == 55 then
+            instance:call("updateShortcut()")
+        else
+            return
+        end
+        
+        setIsCraftingFalse()
+        itemSuccess = false
+        return 
+    end
+ 
     if itemSuccess == false then
         if sourceInput == 100 and GUI020600_itemIndex_current ~= nil then
             instance:call('execute(System.Int32)', GUI020600_itemIndex_current)
@@ -357,7 +490,6 @@ local function cancelTriggerAttack(args)
         debug("CANCELLED BY MASTERPLAYER ATTACK")
         setItemSuccess()
     end
-    
 end
 
 local function cancelTriggerDodge(args)
@@ -399,7 +531,6 @@ local function cancelTriggerSeikretDismount(args)
     end
 end
 
-
 local function cancelTriggerWpAction(args)
     local isMasterPlayer = sdk.to_managed_object(args[2]):get_field("_Character")
     
@@ -417,16 +548,6 @@ local function cancelTriggerSlingerLoad(args)
         setItemSuccess()
     end
 end
-
---[[
-local function cancelTriggerItemCraft(args)
-    local isMasterPlayer = sdk.to_managed_object(args[2]):get_field("_Owner"):get_field("")
-    if isMasterPlayer:get_IsMaster() == true then
-        debug("CANCELLED BY MASTERPLAYER ITEM CRAFT")
-        setItemSuccess()
-    end
-end
-]]
 
 local function cancelTriggerOtomo(args)
     local isMasterPlayer = sdk.to_managed_object(args[2]):get_field("_OwnerHunter")
@@ -459,28 +580,27 @@ local function cancelTriggerForce(args)
     setItemSuccess()
 end
 
+--[[
 local function cancelTriggerAmmoCrafting(args)
     local managedObject = sdk.to_managed_object(args[2])
     if not managedObject then return end
 
-    local indexObject = managedObject:get_field("_Index")
-    if not indexObject then return end
-
-    local indexField = indexObject:get_field("<Recipe>k__BackingField")
-    if not indexField then return end
-
-    if indexField == nil then
-        return
-    end
+    local indexField = managedObject:get_field("_Index")
+    if indexField == nil then return end
 
     local recipeIndex = getItemId(indexField)
 
     if recipeIndex ~= nil and recipeIndex >= 46 and recipeIndex <= 65 then
-        debug("CANCELLED BY cancelTriggerAmmoCrafting")
+        debug("cancelTriggerAmmoCrafting")
         itemSuccess = false
         setItemSuccess()
     end
 end
+]]
+
+
+
+
 
 -- Indicator ------------------------------------
 -- Initializer for indicator
@@ -500,7 +620,7 @@ local function draw_indicator_circle(x, y, radius, color)
 end
 
 re.on_frame(function()
-    if not config.IndicatorEnable then return end
+    if config.IndicatorEnable == false then return end
 
     local show_indicator = (itemSuccess == false) or (config.IndicatorShowInMenu and reframework:is_drawing_ui())
 
@@ -584,21 +704,36 @@ if config.Enable == true then
     if type_GUI020008 then
         sdk.hook(type_GUI020008:get_method('onOpenApp'), cancelUseItem, function(retval) debug("Canceled by type_GUI020008") end)
         sdk.hook(type_GUI020008:get_method("useActiveItem"), saveItem, nil)
+        --sdk.hook(type_GUI020008:get_method("requestOpenCraftWindow"), setIsCraftingTrue, nil)
+    end
+
+    if type_GUI020008PartsRotateFrame then
+        sdk.hook(type_GUI020008PartsRotateFrame:get_method("updateItem"), cancelTriggerGUI020008UpdateItem, nil)
     end
 
     -- Save item from M+KB
     if type_GUI020600 then
         sdk.hook(type_GUI020600:get_method("execute"), saveItem, nil)
+        --sdk.hook(type_GUI020600:get_method("requestOpenCraftWindow"), setIsCraftingTrue, nil)
     end
 
-    -- Item used successfully
-    if type_HunterExtendBase then
-        sdk.hook(type_HunterExtendBase:get_method("successItem(app.ItemDef.ID, System.Int32, System.Boolean, ace.ShellBase, System.Single, System.Boolean, app.ItemDef.ID, System.Boolean)"), cancelUseItem, nil)
+    if type_GUI020600PartsFrame then
+        --sdk.hook(type_GUI020600PartsFrame:get_method("updateItem"), cancelTriggerGUI0020600UpdateItem, nil)
     end
 
     -- Retry item Use
     if type_PlayerManager then
         sdk.hook(type_PlayerManager:get_method("update"), tryUseItem, nil)
+    end
+
+    --Check crafting itemAmount for logic
+    if type_ItemRecipeUtil then
+        sdk.hook(type_ItemRecipeUtil:get_method("craft"), checkCraftAllorOne, nil)
+    end
+
+    -- Item used successfully
+    if type_HunterExtendBase then
+        sdk.hook(type_HunterExtendBase:get_method("successItem(app.ItemDef.ID, System.Int32, System.Boolean, ace.ShellBase, System.Single, System.Boolean, app.ItemDef.ID, System.Boolean)"), cancelUseItem, nil)
     end
 
     -- Skip pad control if HUD is closed
@@ -684,7 +819,6 @@ if config.Enable == true then
 
     -- Slinger reload
     if type_PlayerCommonSubActionUseSlingerItem then
-        --sdk.hook(type_PlayerCommonSubActionUseSlingerItem:get_method("doItemLoad"), cancelUseItem, nil)
         sdk.hook(type_PlayerCommonSubActionUseSlingerItem:get_method("doEnter"), cancelTriggerSlingerLoad, nil)
     end
 
@@ -706,11 +840,6 @@ if config.Enable == true then
     -- Binoculars
     if type_cSougankyo then
         sdk.hook(type_cSougankyo:get_method("enter"), cancelTriggerForce, nil)
-    end
-
-    -- Item craft
-    if type_cGUIItemCraft then
-        sdk.hook(type_cGUIItemCraft:get_method("open"), cancelTriggerAmmoCrafting, nil)
     end
 
     -- Emote
