@@ -276,7 +276,7 @@ local type_cCustomShortcutElement = sdk.find_type_definition("app.cCustomShortcu
 
 --= Variables ================================================================================--
 -- Flags and States
-local debug_flag = false
+local debug_flag = true
 local instance = nil
 local instance_activeShortcut = nil
 local isCrafting = false
@@ -363,8 +363,8 @@ local function skipPadInput(args)
     end
 end
 
-function updateShortcutTable(table_shortcutRecipeItem, recipe)
-    table.insert(table_shortcutRecipeItem, recipe)
+function updateShortcutTable(table_shortcutRecipeItem, item, recipe)
+    table.insert(table_shortcutRecipeItem, {itemId = item, recipeId = recipe})
 end
 
 local function updateShortcut(retval)
@@ -492,7 +492,7 @@ local function checkShortcutType(args)
     local shortcutItemID = instance_activeShortcut:get_field("<ItemId>k__BackingField")
     local shortcutRecipeID = instance_activeShortcut:get_field("<RecipeId>k__BackingField")
 
-    updateShortcutTable(table_shortcutRecipeItem, shortcutRecipeID)
+    updateShortcutTable(table_shortcutRecipeItem, shortcutItemID, shortcutRecipeID)
 end
 
 local function retryShortcut(args)
@@ -508,13 +508,16 @@ local function retryShortcut(args)
     end
     checkIfTimerCancel()
     
-
     local anyActualItem = false
     if table_shortcutRecipeItem ~= nil then
-        for _, recipe in ipairs(table_shortcutRecipeItem) do
-            if recipe == -1 or recipe == "-1" then
-                anyActualItem = true
-                break
+        for _, entry in ipairs(table_shortcutRecipeItem) do
+            if type(entry) == "table" then
+                --debug("Entry: itemId = " .. tostring(entry.itemId) .. ", recipeId = " .. tostring(entry.recipeId))
+
+                if (entry.recipeId == -1 or entry.recipeId == "-1") then
+                    anyActualItem = true
+                    break
+                end
             end
         end
     else
