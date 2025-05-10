@@ -1,18 +1,19 @@
 -- @Author taakefyrsten
 -- https://next.nexusmods.com/profile/taakefyrsten
 -- https://github.com/jwlei/radial_queue
--- Version 2.0v2
+-- Version 2.1
+local debug_flag = false
 
 --= Configuration =============================================================================--
 local config = {
     Enable = true,  -- Toggle mod
-    EnableNoCombatTimer = true,
+    EnableNoCombatTimer = false,
     ResetTimerNoCombat = 1, -- Time in seconds to reset item use
     EnableCombatTimer = false,
     ResetTimerCombat = 15,
     --EnableDodgePersist = false,
     --DodgePersistCount = 0,
-    EnableCancelControl = true,
+    EnableCancelControl = false,
     EnableCancelHitReceived = false,
     IndicatorEnable = false,
     IndicatorPosX = 720,
@@ -46,8 +47,8 @@ local function load_config()
         if config.ResetTimerNoCombat == nil         then config.ResetTimerNoCombat = 1 end
         if config.EnableCombatTimer == nil          then config.EnableCombatTimer = 0 end
         if config.ResetTimerCombat == nil           then config.ResetTimerCombat = 15 end
-        if config.EnableCancelControl == nil        then config.EnableCancelControl = 1 end
-        if config.EnableCancelHitReceived == nil   then config.EnableCancelHitReceived = 0 end
+        if config.EnableCancelControl == nil        then config.EnableCancelControl = 0 end
+        if config.EnableCancelHitReceived == nil    then config.EnableCancelHitReceived = 0 end
         if config.IndicatorEnable == nil            then config.IndicatorEnable = 0 end
         if config.IndicatorPosX == nil              then config.IndicatorPosX = 720 end
         if config.IndicatorPosY == nil              then config.IndicatorPosY = 100 end
@@ -167,101 +168,104 @@ re.on_draw_ui(function()
 
             if config.IndicatorEnable then
                 imgui.indent(20)
-                if imgui.checkbox("Show preview in REFramework menu", config.IndicatorShowInMenu) then
-                    config.IndicatorShowInMenu = not config.IndicatorShowInMenu
-                    save_config()
-                    load_config()
-                end
-
-                local changedX, newX = imgui.slider_int("Position X", config.IndicatorPosX or 720, 0, 3840)
-                if changedX then
-                    config.IndicatorPosX = newX
-                    save_config()
-                    load_config()
-                end
-
-                local changedY, newY = imgui.slider_int("Position Y", config.IndicatorPosY or 100, 0, 2160)
-                if changedY then
-                    config.IndicatorPosY = newY
-                    save_config()
-                    load_config()
-                end
-
-                local changedRadius, newRadius = imgui.slider_int("Base Radius", config.IndicatorBaseRadius or 20, 1, 50)
-                if changedRadius then
-                    config.IndicatorBaseRadius = newRadius
-                    save_config()
-                    load_config()
-                end
-
-                if imgui.checkbox("Pulse Radius", config.IndicatorShouldPulse) then
-                    config.IndicatorShouldPulse = not config.IndicatorShouldPulse
-                    save_config()
-                    load_config()
-                end
-
-                if config.IndicatorShouldPulse then
-                    local changedPulseSpeed, newPulseSpeed = imgui.slider_float("Pulse Speed", config.IndicatorPulseSpeed or 1.0, 0.1, 5.0)
-                    if changedPulseSpeed then
-                        config.IndicatorPulseSpeed = newPulseSpeed
+                if imgui.collapsing_header("Visual indicator settings") then
+                
+                    if imgui.checkbox("Show preview in REFramework menu", config.IndicatorShowInMenu) then
+                        config.IndicatorShowInMenu = not config.IndicatorShowInMenu
                         save_config()
                         load_config()
                     end
 
-                    local changedMinAlpha, newMinAlpha = imgui.slider_float("Minimum Pulse Alpha", config.IndicatorMinimumPulseAlpha or 0.0, 0.0, 1.0)
-                    if changedMinAlpha then
-                        config.IndicatorMinimumPulseAlpha = newMinAlpha
+                    local changedX, newX = imgui.slider_int("Position X", config.IndicatorPosX or 720, 0, 3840)
+                    if changedX then
+                        config.IndicatorPosX = newX
                         save_config()
                         load_config()
                     end
 
-                    local changedMaxAlpha, newMaxAlpha = imgui.slider_float("Maximum Pulse Alpha", config.IndicatorMaxPulseAlpha or 1.0, 0.0, 1.0)
-                    if changedMaxAlpha then
-                        config.IndicatorMaxPulseAlpha = newMaxAlpha
+                    local changedY, newY = imgui.slider_int("Position Y", config.IndicatorPosY or 100, 0, 2160)
+                    if changedY then
+                        config.IndicatorPosY = newY
                         save_config()
                         load_config()
                     end
 
-                    local changedGrowth, newGrowth = imgui.slider_int("Pulse Growth", config.IndicatorPulseGrowth or 0, 0, 50)
-                    if changedGrowth then
-                        config.IndicatorPulseGrowth = newGrowth
+                    local changedRadius, newRadius = imgui.slider_int("Base Radius", config.IndicatorBaseRadius or 20, 1, 50)
+                    if changedRadius then
+                        config.IndicatorBaseRadius = newRadius
                         save_config()
                         load_config()
                     end
-                end
 
-                if imgui.checkbox("Fade On Success", config.IndicatorShouldFade) then
-                    config.IndicatorShouldFade = not config.IndicatorShouldFade
-                    save_config()
-                    load_config()
-                end
-
-                if config.IndicatorShouldFade then
-                    local changedFade, newFade = imgui.slider_float("Fade Duration (s)", config.IndicatorFadeDuration or 0.5, 0.1, 5.0)
-                    if changedFade then
-                        config.IndicatorFadeDuration = newFade
+                    if imgui.checkbox("Pulse Radius", config.IndicatorShouldPulse) then
+                        config.IndicatorShouldPulse = not config.IndicatorShouldPulse
                         save_config()
                         load_config()
                     end
-                end
 
-                local changedPending, newPending = imgui.color_picker("Pending Color", config.IndicatorColorPending)
-                if changedPending then
-                    config.IndicatorColorPending = newPending
-                    save_config()
-                    load_config()
-                end
+                    if config.IndicatorShouldPulse then
+                        local changedPulseSpeed, newPulseSpeed = imgui.slider_float("Pulse Speed", config.IndicatorPulseSpeed or 1.0, 0.1, 5.0)
+                        if changedPulseSpeed then
+                            config.IndicatorPulseSpeed = newPulseSpeed
+                            save_config()
+                            load_config()
+                        end
 
-                local changedSuccess, newSuccess = imgui.color_picker("Success Color", config.IndicatorColorSuccess)
-                if changedSuccess then
-                    config.IndicatorColorSuccess = newSuccess
-                    save_config()
-                    load_config()
+                        local changedMinAlpha, newMinAlpha = imgui.slider_float("Minimum Pulse Alpha", config.IndicatorMinimumPulseAlpha or 0.0, 0.0, 1.0)
+                        if changedMinAlpha then
+                            config.IndicatorMinimumPulseAlpha = newMinAlpha
+                            save_config()
+                            load_config()
+                        end
+
+                        local changedMaxAlpha, newMaxAlpha = imgui.slider_float("Maximum Pulse Alpha", config.IndicatorMaxPulseAlpha or 1.0, 0.0, 1.0)
+                        if changedMaxAlpha then
+                            config.IndicatorMaxPulseAlpha = newMaxAlpha
+                            save_config()
+                            load_config()
+                        end
+
+                        local changedGrowth, newGrowth = imgui.slider_int("Pulse Growth", config.IndicatorPulseGrowth or 0, 0, 50)
+                        if changedGrowth then
+                            config.IndicatorPulseGrowth = newGrowth
+                            save_config()
+                            load_config()
+                        end
+                    end
+
+                    if imgui.checkbox("Fade On Success", config.IndicatorShouldFade) then
+                        config.IndicatorShouldFade = not config.IndicatorShouldFade
+                        save_config()
+                        load_config()
+                    end
+
+                    if config.IndicatorShouldFade then
+                        local changedFade, newFade = imgui.slider_float("Fade Duration (s)", config.IndicatorFadeDuration or 0.5, 0.1, 5.0)
+                        if changedFade then
+                            config.IndicatorFadeDuration = newFade
+                            save_config()
+                            load_config()
+                        end
+                    end
+
+                    local changedPending, newPending = imgui.color_picker("Pending Color", config.IndicatorColorPending)
+                    if changedPending then
+                        config.IndicatorColorPending = newPending
+                        save_config()
+                        load_config()
+                    end
+
+                    local changedSuccess, newSuccess = imgui.color_picker("Success Color", config.IndicatorColorSuccess)
+                    if changedSuccess then
+                        config.IndicatorColorSuccess = newSuccess
+                        save_config()
+                        load_config()
+                    end
                 end
                 imgui.unindent(20)
-            end
-            imgui.tree_pop()
-        end   
+            end  
+        end 
+        imgui.tree_pop()
     end
 end)
 
@@ -302,7 +306,6 @@ local type_cCustomShortcutElement = sdk.find_type_definition("app.cCustomShortcu
 
 --= Variables ================================================================================--
 -- Flags and States
-local debug_flag = true
 local instance = nil
 local instance_activeShortcut = nil
 local isCrafting = false
@@ -373,7 +376,7 @@ local function setInputSource(instance)
     end
 end
 
-local function getItemId(args)
+local function getUserdataToInt(args)
     return tonumber(string.sub(string.gsub(tostring(args), "userdata: ", ""), -2), 16)
 end
 
@@ -394,6 +397,9 @@ function updateShortcutTable(table_shortcutRecipeItem, item, recipe)
 end
 
 local function updateShortcut(retval)
+    if instance_activeShortcut == nil then
+        return
+    end
     instance_activeShortcut:call("update()")
 end
 
@@ -406,8 +412,12 @@ local function setItemSuccess()
        instance = nil
        isCrafting = false
        isCraftingRecipeOnly = nil
+       craftingRecipeID = nil
        instance_activeShortcut = nil
        table_shortcutRecipeItem = {}
+       shortcutIsEnabled = nil
+       shortcutPreviousItemId = nil
+       
        --cancelCountDodge = 0
 end
 
@@ -415,6 +425,50 @@ local function cancelExecution()
     if itemSuccess == false then
         setItemSuccess()
     end
+end
+
+local shortcutIsSelected = nil
+local shortcutItemId = nil
+local shortcutPreviousItemId = nil
+local function checkIsShortcutSelected(args)
+    if args == nil then
+        return
+    end
+
+    if sdk.to_managed_object(args[2]):get_field("<_Selected>k__BackingField") == true then 
+        shortcutIsSelected = true
+        shortcutItemId = getUserdataToInt(sdk.to_managed_object(args[2]):get_field("<ItemId>k__BackingField"))
+
+        if shortcutItemId == -1 then 
+            setItemSuccess()
+        end
+
+        if shortcutPreviousItemId == nil then
+            shortcutPreviousItemId = shortcutItemId
+        elseif shortcutPreviousItemId ~= shortcutItemId then
+            if sourceInput == 55 then
+                setItemSuccess()
+            end
+            shortcutPreviousItemId = shortcutItemId
+        end
+    else
+        shortcutIsSelected = false
+    end
+    
+end
+
+local shortcutIsEnabled = nil
+local function checkIsShortcutEnabled(retval)
+    if shortcutIsSelected == true then
+        local ret = getUserdataToInt(sdk.to_ptr(retval))
+        if ret == 1 then
+            shortcutIsEnabled = true
+        else
+            shortcutIsEnabled = false
+        end
+    end
+
+    return retval
 end
 
 local function startTimer()
@@ -455,7 +509,7 @@ local function checkCancelByItemID(args)
         return
     end
     -- Todo, check hunter health if should cancel
-    local itemId = getItemId(args[2])
+    local itemId = getUserdataToInt(args[2])
     
     if     itemId == 1 --Potion
         or itemId == 2 --Mega Potion
@@ -482,7 +536,8 @@ local function saveItem(args)
     setInputSource(instance)
 
     if sourceInput == 100 then
-        GUI020600_itemIndex_current = getItemId(args[3])
+        GUI020600_itemIndex_current = getUserdataToInt(args[3])
+        shortcutPreviousItemId = nil
     end
 
     itemSuccess = false
@@ -515,10 +570,10 @@ local function checkShortcutType(args)
     end
     if instance_activeShortcut == nil then return end
     
-    local shortcutItemID = instance_activeShortcut:get_field("<ItemId>k__BackingField")
+    local shortcutRecipeItemID = instance_activeShortcut:get_field("<ItemId>k__BackingField")
     local shortcutRecipeID = instance_activeShortcut:get_field("<RecipeId>k__BackingField")
 
-    updateShortcutTable(table_shortcutRecipeItem, shortcutItemID, shortcutRecipeID)
+    updateShortcutTable(table_shortcutRecipeItem, shortcutRecipeItemID, shortcutRecipeID)
 end
 
 local function retryShortcut(args)
@@ -532,8 +587,14 @@ local function retryShortcut(args)
     if instance_activeShortcut ~= nil then
         instance_activeShortcut:call("update()")
     end
+
+    if sourceInput == 55 and shortcutIsEnabled == false then
+        debug("retryShortcut - Shortcut is disabled, cancelling")
+        setItemSuccess()
+    end
+
     checkIfTimerCancel()
-    
+
     local anyActualItem = false
     if table_shortcutRecipeItem ~= nil then
         for _, entry in ipairs(table_shortcutRecipeItem) do
@@ -654,7 +715,7 @@ local function cancelTriggerOtomo(args)
     local isMasterPlayer = sdk.to_managed_object(args[2]):get_field("_OwnerHunter")
 
     if isMasterPlayer:get_IsMaster() == true then
-        debug("CANCELLED BY MASTERPLAYER OTOMO")
+        debug("CANCELLED BY MASTERPLAYER EMOTE")
         setItemSuccess()
     end
 end
@@ -798,6 +859,7 @@ if config.Enable == true then
     -- Check shortcut type
     if type_cCustomShortcutElement then
         sdk.hook(type_cCustomShortcutElement:get_method("update"), checkShortcutType, nil)
+        sdk.hook(type_cCustomShortcutElement:get_method("isEnable"), checkIsShortcutSelected, checkIsShortcutEnabled)
     end
 
     -- Retry shortcut execution
