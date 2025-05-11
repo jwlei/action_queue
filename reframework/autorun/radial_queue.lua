@@ -1,48 +1,50 @@
 -- @Author taakefyrsten
 -- https://next.nexusmods.com/profile/taakefyrsten
 -- https://github.com/jwlei/radial_queue
--- Version 2.1
-local debug_flag = false
+-- Version 2.3
+local debug_flag = true
+local CONFIG_PATH = "radial_queue.json"
 
 --= Configuration =============================================================================--
 local config = {
-    Enable = true,  -- Toggle mod
-    EnableNoCombatTimer = false,
-    ResetTimerNoCombat = 1, -- Time in seconds to reset item use
-    EnableCombatTimer = false,
-    ResetTimerCombat = 15,
-    --EnableDodgePersist = false,
-    --DodgePersistCount = 0,
-    EnableCancelControl = false,
-    EnableCancelHitReceived = false,
-    IndicatorEnable = false,
-    IndicatorPosX = 720,
-    IndicatorPosY = 100,
-    IndicatorBaseRadius = 15,
-    IndicatorColorPending = 3356920024, 
-    IndicatorColorSuccess = 3355508539,
-    IndicatorShouldFade = true,
-    IndicatorFadeDuration = 0.5,
-    IndicatorShouldPulse = true,
-    IndicatorPulseSpeed = 1.0,
-    IndicatorPulseGrowth = 10,
-    IndicatorShowInMenu = true,
-    IndicatorMinimumPulseAlpha = 0.5,
-    IndicatorMaxPulseAlpha = 1.0
+    Enable                              = true,  -- Toggle mod
+    EnableNoCombatTimer                 = false,
+    ResetTimerNoCombat                  = 1, -- Time in seconds to reset item use
+    EnableCombatTimer                   = false,
+    ResetTimerCombat                    = 15,
+    --EnableDodgePersist                = false,
+    --DodgePersistCount                 = 0,
+    EnableCancelControl                 = false,
+    EnableCancelHitReceived             = false,
+    IndicatorEnable                     = false,
+    IndicatorPosX                       = 720,
+    IndicatorPosY                       = 100,
+    IndicatorBaseRadius                 = 15,
+    IndicatorColorPending               = 3356920024, 
+    IndicatorColorSuccess               = 3355508539,
+    IndicatorShouldFade                 = true,
+    IndicatorFadeDuration               = 0.5,
+    IndicatorShouldPulse                = true,
+    IndicatorPulseSpeed                 = 1.0,
+    IndicatorPulseGrowth                = 10,
+    IndicatorShowInMenu                 = true,
+    IndicatorMinimumPulseAlpha          = 0.5,
+    IndicatorMaxPulseAlpha              = 1.0
 }
 
 local function save_config()
-    json.dump_file("radial_queue.json", config)
+    json.dump_file(CONFIG_PATH, config)
 end
 
 local function load_config()
     if loadedTable == nil then
-        loadedTable = json.load_file("radial_queue.json")
+        loadedTable = json.load_file(CONFIG_PATH)
     end
 
     if loadedTable then
         config = loadedTable
-        if config.Enable == nil then config.Enable = 1 end
+        --[[
+                if config.Enable == nil then config.Enable = 1 end
         if config.EnableNoCombatTimer == nil        then config.EnableNoCombatTimer = 1 end
         if config.ResetTimerNoCombat == nil         then config.ResetTimerNoCombat = 1 end
         if config.EnableCombatTimer == nil          then config.EnableCombatTimer = 0 end
@@ -63,6 +65,7 @@ local function load_config()
         if config.IndicatorShowInMenu == nil        then config.IndicatorShowInMenu = 1 end
         if config.IndicatorMinimumPulseAlpha == nil then config.IndicatorMinimumPulseAlpha = 0.5 end
         if config.IndicatorMaxPulseAlpha == nil     then config.IndicatorMaxPulseAlpha = 1.0 end
+        ]]
     else
         save_config()
     end
@@ -270,62 +273,63 @@ re.on_draw_ui(function()
 end)
 
 
+
 --= Type definitions =========================================================================--
-local type_GUI020006 = sdk.find_type_definition("app.GUI020006") -- Item bar
-local type_GUI020008 = sdk.find_type_definition("app.GUI020008") -- Radial Menu
-local type_GUI020600 = sdk.find_type_definition("app.GUI020600") -- M+KB item select
-local type_GUI030208 = sdk.find_type_definition("app.GUI030208") -- Radial customization
-local type_GUI040000 = sdk.find_type_definition("app.GUI040000") -- Member list
-local type_GUI040002 = sdk.find_type_definition("app.GUI040002") -- Invitation list
-local type_cGUI060000 = sdk.find_type_definition("app.cGUI060000Sign.cMapPlayerSign") -- Mini map ping
-local type_ChatLogCommunication = sdk.find_type_definition("app.GUIFlowChatLogCommunication") -- Chat log
-local type_HunterExtendBase = sdk.find_type_definition("app.HunterCharacter.cHunterExtendBase")
-local type_PlayerManager = sdk.find_type_definition("app.PlayerManager")
-local type_cHunterBadConditions = sdk.find_type_definition("app.HunterBadConditions.cHunterBadConditions")
-local type_Weapon = sdk.find_type_definition("app.Weapon")
-local type_cGUIShortcutPadControl = sdk.find_type_definition("app.cGUIShortcutPadControl")
-local type_HunterItemActionTable = sdk.find_type_definition("app.HunterItemActionTable")
-local type_ChatManager = sdk.find_type_definition("app.ChatManager")
-local type_PlayerCommonSubActionUseSlingerItem = sdk.find_type_definition("app.PlayerCommonSubAction.cUseSlingerItem")
-local type_mcOtomoCommunicator = sdk.find_type_definition("app.mcOtomoCommunicator")
-local type_cCallPorter = sdk.find_type_definition("app.PlayerCommonSubAction.cCallPorter")
-local type_cPorterDismountBase = sdk.find_type_definition("app.PlayerCommonAction.cPorterDismountBase")
-local type_cPorterDismountJumpOff = sdk.find_type_definition("app.PlayerCommonAction.cPorterDismountJumpOff")
-local type_mcHunterBonfire = sdk.find_type_definition("app.mcHunterBonfire")
-local type_mcHunterFishing = sdk.find_type_definition("app.mcHunterFishing")
-local type_PauseManagerBase = sdk.find_type_definition("ace.PauseManagerBase")
-local type_PhotoCameraController = sdk.find_type_definition("app.PhotoCameraController")
-local type_cGUIMapController = sdk.find_type_definition("app.cGUIMapController")
-local type_cSougankyo = sdk.find_type_definition("app.CameraSubAction.cSougankyo")
-local type_ItemRecipeUtil = sdk.find_type_definition("app.ItemRecipeUtil")
-local type_Hit = sdk.find_type_definition("app.Hit")
-local type_cCustomShortcutElement = sdk.find_type_definition("app.cCustomShortcutElement")
+local type_GUI020006                            = sdk.find_type_definition("app.GUI020006") -- Item bar
+local type_GUI020008                            = sdk.find_type_definition("app.GUI020008") -- Radial Menu
+local type_GUI020600                            = sdk.find_type_definition("app.GUI020600") -- M+KB item select
+local type_GUI030208                            = sdk.find_type_definition("app.GUI030208") -- Radial customization
+local type_GUI040000                            = sdk.find_type_definition("app.GUI040000") -- Member list
+local type_GUI040002                            = sdk.find_type_definition("app.GUI040002") -- Invitation list
+local type_cGUI060000                           = sdk.find_type_definition("app.cGUI060000Sign.cMapPlayerSign") -- Mini map ping
+local type_ChatLogCommunication                 = sdk.find_type_definition("app.GUIFlowChatLogCommunication") -- Chat log
+local type_HunterExtendBase                     = sdk.find_type_definition("app.HunterCharacter.cHunterExtendBase")
+local type_PlayerManager                        = sdk.find_type_definition("app.PlayerManager")
+local type_cHunterBadConditions                 = sdk.find_type_definition("app.HunterBadConditions.cHunterBadConditions")
+local type_Weapon                               = sdk.find_type_definition("app.Weapon")
+local type_cGUIShortcutPadControl               = sdk.find_type_definition("app.cGUIShortcutPadControl")
+local type_HunterItemActionTable                = sdk.find_type_definition("app.HunterItemActionTable")
+local type_ChatManager                          = sdk.find_type_definition("app.ChatManager")
+local type_PlayerCommonSubActionUseSlingerItem  = sdk.find_type_definition("app.PlayerCommonSubAction.cUseSlingerItem")
+local type_mcOtomoCommunicator                  = sdk.find_type_definition("app.mcOtomoCommunicator")
+local type_cCallPorter                          = sdk.find_type_definition("app.PlayerCommonSubAction.cCallPorter")
+local type_cPorterDismountBase                  = sdk.find_type_definition("app.PlayerCommonAction.cPorterDismountBase")
+local type_cPorterDismountJumpOff               = sdk.find_type_definition("app.PlayerCommonAction.cPorterDismountJumpOff")
+local type_mcHunterBonfire                      = sdk.find_type_definition("app.mcHunterBonfire")
+local type_mcHunterFishing                      = sdk.find_type_definition("app.mcHunterFishing")
+local type_PauseManagerBase                     = sdk.find_type_definition("ace.PauseManagerBase")
+local type_PhotoCameraController                = sdk.find_type_definition("app.PhotoCameraController")
+local type_cGUIMapController                    = sdk.find_type_definition("app.cGUIMapController")
+local type_cSougankyo                           = sdk.find_type_definition("app.CameraSubAction.cSougankyo")
+local type_ItemRecipeUtil                       = sdk.find_type_definition("app.ItemRecipeUtil")
+local type_Hit                                  = sdk.find_type_definition("app.Hit")
+local type_cCustomShortcutElement               = sdk.find_type_definition("app.cCustomShortcutElement")
 --app.GUI020006.requestOpenItemSlider Item bar
 --app.GUI020007 Radial M+KB
 
 
 --= Variables ================================================================================--
 -- Flags and States
-local instance = nil
-local instance_activeShortcut = nil
-local isCrafting = false
-local isCraftingRecipeOnly = nil
-local HunterCharacter = nil
-local shouldSkipPad = true
+local instance                      = nil
+local instance_activeShortcut       = nil
+local isCrafting                    = false
+local isCraftingRecipeOnly          = nil
+local HunterCharacter               = nil
+local shouldSkipPad                 = true
 
 -- Crafting Information
-local craftingRecipeID = nil
-local itemSuccess = nil
-local GUI020600_itemIndex_current = nil
+local craftingRecipeID              = nil
+local itemSuccess                   = nil
+local GUI020600_itemIndex_current   = nil
 
 -- Counters and Time
-local cancelCount = 0
-local resetTime = nil
+local cancelCount                   = 0
+local resetTime                     = nil
 
 -- Miscellaneous Information
-local loadedTable = nil
-local sourceInput = nil
-local table_shortcutRecipeItem = {}
+local loadedTable                   = nil
+local sourceInput                   = nil
+local table_shortcutRecipeItem      = {}
 --local cancelCountDodge = 0
 
 
@@ -338,13 +342,13 @@ local function debug(msg)
 end
 
 local function getHunterCharacter() 
-    local Player = sdk.get_managed_singleton("app.PlayerManager"):get_field("_PlayerList")[0]
+    local MasterPlayer = sdk.get_managed_singleton("app.PlayerManager"):get_field("_PlayerList")[0]
 
-	if Player == nil then 
+	if MasterPlayer == nil then 
 		return 
 	end
 
-	HunterCharacter = Player:get_field("_PlayerInfo"):get_field("<Character>k__BackingField")
+	HunterCharacter = MasterPlayer:get_field("_PlayerInfo"):get_field("<Character>k__BackingField")
 	if HunterCharacter == nil then
 		return
     end
@@ -406,7 +410,6 @@ end
 local function setItemSuccess()
        itemSuccess = true
        resetTime = nil
-       cancelCount = 0
        sourceInput = nil 
        GUI020600_itemIndex_current = nil
        instance = nil
@@ -504,22 +507,27 @@ local function checkIfTimerCancel()
     end
 end
 
-local function checkCancelByItemID(args)
+local function checkCancelPotionMaxHealth(args)
     if args == nil then
         return
     end
+
+    local hunterHealth = getHunterCharacter():call("get_HunterHealth()")
+    local healthmanager = hunterHealth:get_field("<HealthMgr>k__BackingField")
+    local health = healthmanager:get_Health()
+    local maxHealth = healthmanager:get_MaxHealth()
+
+
     -- Todo, check hunter health if should cancel
     local itemId = getUserdataToInt(args[2])
     
     if     itemId == 1 --Potion
         or itemId == 2 --Mega Potion
+        and health == maxHealth
     then
-        cancelCount = cancelCount + 1
-    end
-
-    if cancelCount >= 1 then
         setItemSuccess()
-        debug("setItemSuccess() from checkCancelByItemID")
+        debug("setItemSuccess() from checkCancelPotionMaxHealth")
+        --cancelCount = cancelCount + 1
     end
 end
 
@@ -652,7 +660,7 @@ local function cancelTriggerWpAction(args)
 end
 
 local function cancelTriggerReceivedHit(args)
-    if config.EnableCancelHitReceived == false then return end
+    if config.EnableCancelControl == false or config.EnableCancelHitReceived == false then return end
     local hitObj = sdk.to_managed_object(args[3]):get_field("<DamageHit>k__BackingField")
     local damageReceiver = hitObj:get_field("_Owner"):get_Name()
     if damageReceiver == nil then return end
@@ -1003,7 +1011,7 @@ if config.Enable == true then
 
     -- Get ItemID for potion cancel
     if type_HunterItemActionTable then
-        sdk.hook(type_HunterItemActionTable:get_method("getItemActionTypeFromItemID"), checkCancelByItemID, nil)
+        sdk.hook(type_HunterItemActionTable:get_method("getItemActionTypeFromItemID"), checkCancelPotionMaxHealth, nil)
     end
 end
 
