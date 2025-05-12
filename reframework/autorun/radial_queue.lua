@@ -1,7 +1,7 @@
 -- @Author taakefyrsten
 -- https://next.nexusmods.com/profile/taakefyrsten
 -- https://github.com/jwlei/radial_queue
--- Version 2.3
+-- Version 2.3v2
 local debug_flag = true
 local CONFIG_PATH = "radial_queue.json"
 
@@ -37,40 +37,21 @@ local function save_config()
 end
 
 local function load_config()
-    if loadedTable == nil then
-        loadedTable = json.load_file(CONFIG_PATH)
-    end
+    local loadedConfig = json.load_file(CONFIG_PATH)
 
-    if loadedTable then
-        config = loadedTable
-        --[[
-                if config.Enable == nil then config.Enable = 1 end
-        if config.EnableNoCombatTimer == nil        then config.EnableNoCombatTimer = 1 end
-        if config.ResetTimerNoCombat == nil         then config.ResetTimerNoCombat = 1 end
-        if config.EnableCombatTimer == nil          then config.EnableCombatTimer = 0 end
-        if config.ResetTimerCombat == nil           then config.ResetTimerCombat = 15 end
-        if config.EnableCancelControl == nil        then config.EnableCancelControl = 0 end
-        if config.EnableCancelHitReceived == nil    then config.EnableCancelHitReceived = 0 end
-        if config.IndicatorEnable == nil            then config.IndicatorEnable = 0 end
-        if config.IndicatorPosX == nil              then config.IndicatorPosX = 720 end
-        if config.IndicatorPosY == nil              then config.IndicatorPosY = 100 end
-        if config.IndicatorBaseRadius == nil        then config.IndicatorBaseRadius = 20 end
-        if config.IndicatorColorPending == nil      then config.IndicatorColorPending = 3356920024 end
-        if config.IndicatorColorSuccess == nil      then config.IndicatorColorSuccess = 3355508539 end
-        if config.IndicatorShouldFade == nil        then config.IndicatorShouldFade = 1 end
-        if config.IndicatorFadeDuration == nil      then config.IndicatorFadeDuration = 0.5 end
-        if config.IndicatorShouldPulse == nil       then config.IndicatorShouldPulse = 1 end
-        if config.IndicatorPulseSpeed == nil        then config.IndicatorPulseSpeed = 1.0 end
-        if config.IndicatorPulseGrowth == nil       then config.IndicatorPulseGrowth = 10 end
-        if config.IndicatorShowInMenu == nil        then config.IndicatorShowInMenu = 1 end
-        if config.IndicatorMinimumPulseAlpha == nil then config.IndicatorMinimumPulseAlpha = 0.5 end
-        if config.IndicatorMaxPulseAlpha == nil     then config.IndicatorMaxPulseAlpha = 1.0 end
-        ]]
+    if loadedConfig then
+        config = loadedConfig
     else
         save_config()
     end
 end
+
 load_config()
+
+re.on_config_save(function()
+	save_config()
+    load_config()
+end)
 
 
 --= reFramework config =======================================================================--
@@ -78,8 +59,6 @@ re.on_draw_ui(function()
     if imgui.tree_node("Radial queue") then
         if imgui.checkbox("Enable", config.Enable) then
             config.Enable = not config.Enable
-            save_config()
-            load_config()
         end
 
         if config.Enable then
@@ -87,16 +66,12 @@ re.on_draw_ui(function()
 
             if imgui.checkbox("Enable combat reset timer", config.EnableCombatTimer) then
                 config.EnableCombatTimer = not config.EnableCombatTimer
-                save_config()
-                load_config()
             end
             
             if config.EnableCombatTimer then
                 local changed, new_value_ResetTimerCombat = imgui.slider_int("Combat reset timer (s)", config.ResetTimerCombat, 1, 30)
                 if changed then
                     config.ResetTimerCombat = new_value_ResetTimerCombat
-                    save_config()
-                    load_config()
                 end
                 if imgui.is_item_hovered() then
                     imgui.set_tooltip("Reset all action executions after X seconds regardless while in combat with a monster")
@@ -105,16 +80,12 @@ re.on_draw_ui(function()
 
             if imgui.checkbox("Enable out of combat reset timer", config.EnableNoCombatTimer) then
                 config.EnableNoCombatTimer = not config.EnableNoCombatTimer
-                save_config()
-                load_config()
             end
 
             if config.EnableNoCombatTimer then
                 local changed, new_value_ResetTimerNoCombat = imgui.slider_int("Out of combat reset timer (s)", config.ResetTimerNoCombat, 0, 30)
                 if changed then
                     config.ResetTimerNoCombat = new_value_ResetTimerNoCombat
-                    save_config()
-                    load_config()
                 end
                 if imgui.is_item_hovered() then
                     imgui.set_tooltip("Reset all action executions after X seconds regardless while not in combat with a monster")
@@ -126,16 +97,12 @@ re.on_draw_ui(function()
             if imgui.checkbox("Enable cancel control", config.EnableCancelControl) then
                 imgui.indent(indent_width)
                 config.EnableCancelControl = not config.EnableCancelControl
-                save_config()
-                load_config()
             end
 
             if config.EnableCancelControl then
                 imgui.indent(20)
                 if imgui.checkbox("Enable cancel on hit received", config.EnableCancelHitReceived) then
                     config.EnableCancelHitReceived = not config.EnableCancelHitReceived
-                    save_config()
-                    load_config()
                 end
                 if imgui.is_item_hovered() then
                     imgui.set_tooltip("Cancels item use when hit by a monster")
@@ -153,8 +120,6 @@ re.on_draw_ui(function()
                 local changed, new_value_DodgePersistCount = imgui.slider_int("Dodge persist count", config.DodgePersistCount, 0, 5)
                 if changed then
                     config.DodgePersistCount = new_value_DodgePersistCount
-                    save_config()
-                    load_config()
                 end
                 if imgui.is_item_hovered() then
                     imgui.set_tooltip("Number of dodges in which the queued item will persist")
@@ -165,8 +130,6 @@ re.on_draw_ui(function()
 
             if imgui.checkbox("Enable Indicator", config.IndicatorEnable) then
                 config.IndicatorEnable = not config.IndicatorEnable
-                save_config()
-                load_config()
             end
 
             if config.IndicatorEnable then
@@ -175,94 +138,68 @@ re.on_draw_ui(function()
                 
                     if imgui.checkbox("Show preview in REFramework menu", config.IndicatorShowInMenu) then
                         config.IndicatorShowInMenu = not config.IndicatorShowInMenu
-                        save_config()
-                        load_config()
                     end
 
                     local changedX, newX = imgui.slider_int("Position X", config.IndicatorPosX or 720, 0, 3840)
                     if changedX then
                         config.IndicatorPosX = newX
-                        save_config()
-                        load_config()
                     end
 
                     local changedY, newY = imgui.slider_int("Position Y", config.IndicatorPosY or 100, 0, 2160)
                     if changedY then
                         config.IndicatorPosY = newY
-                        save_config()
-                        load_config()
                     end
 
                     local changedRadius, newRadius = imgui.slider_int("Base Radius", config.IndicatorBaseRadius or 20, 1, 50)
                     if changedRadius then
                         config.IndicatorBaseRadius = newRadius
-                        save_config()
-                        load_config()
                     end
 
                     if imgui.checkbox("Pulse Radius", config.IndicatorShouldPulse) then
                         config.IndicatorShouldPulse = not config.IndicatorShouldPulse
-                        save_config()
-                        load_config()
                     end
 
                     if config.IndicatorShouldPulse then
                         local changedPulseSpeed, newPulseSpeed = imgui.slider_float("Pulse Speed", config.IndicatorPulseSpeed or 1.0, 0.1, 5.0)
                         if changedPulseSpeed then
                             config.IndicatorPulseSpeed = newPulseSpeed
-                            save_config()
-                            load_config()
                         end
 
                         local changedMinAlpha, newMinAlpha = imgui.slider_float("Minimum Pulse Alpha", config.IndicatorMinimumPulseAlpha or 0.0, 0.0, 1.0)
                         if changedMinAlpha then
                             config.IndicatorMinimumPulseAlpha = newMinAlpha
-                            save_config()
-                            load_config()
                         end
 
                         local changedMaxAlpha, newMaxAlpha = imgui.slider_float("Maximum Pulse Alpha", config.IndicatorMaxPulseAlpha or 1.0, 0.0, 1.0)
                         if changedMaxAlpha then
                             config.IndicatorMaxPulseAlpha = newMaxAlpha
-                            save_config()
-                            load_config()
                         end
 
                         local changedGrowth, newGrowth = imgui.slider_int("Pulse Growth", config.IndicatorPulseGrowth or 0, 0, 50)
                         if changedGrowth then
                             config.IndicatorPulseGrowth = newGrowth
-                            save_config()
-                            load_config()
                         end
                     end
 
                     if imgui.checkbox("Fade On Success", config.IndicatorShouldFade) then
                         config.IndicatorShouldFade = not config.IndicatorShouldFade
-                        save_config()
-                        load_config()
                     end
 
                     if config.IndicatorShouldFade then
                         local changedFade, newFade = imgui.slider_float("Fade Duration (s)", config.IndicatorFadeDuration or 0.5, 0.1, 5.0)
                         if changedFade then
                             config.IndicatorFadeDuration = newFade
-                            save_config()
-                            load_config()
                         end
                     end
 
                     local changedPending, newPending = imgui.color_picker("Pending Color", config.IndicatorColorPending)
                     if changedPending then
                         config.IndicatorColorPending = newPending
-                        save_config()
-                        load_config()
                     end
 
                     local changedSuccess, newSuccess = imgui.color_picker("Success Color", config.IndicatorColorSuccess)
                     if changedSuccess then
                         config.IndicatorColorSuccess = newSuccess
-                        save_config()
-                        load_config()
                     end
                 end
                 imgui.unindent(20)
@@ -427,6 +364,7 @@ end
 local function cancelExecution()
     if itemSuccess == false then
         setItemSuccess()
+        debug("setItemSuccess() from cancelExecution")
     end
 end
 
@@ -443,6 +381,7 @@ local function checkIsShortcutSelected(args)
         shortcutItemId = getUserdataToInt(sdk.to_managed_object(args[2]):get_field("<ItemId>k__BackingField"))
 
         if shortcutItemId == -1 then 
+            debug("Shortcut itemId is -1, cancelling")
             setItemSuccess()
         end
 
@@ -450,6 +389,7 @@ local function checkIsShortcutSelected(args)
             shortcutPreviousItemId = shortcutItemId
         elseif shortcutPreviousItemId ~= shortcutItemId then
             if sourceInput == 55 then
+                debug("Shortcut itemId changed, cancelling")
                 setItemSuccess()
             end
             shortcutPreviousItemId = shortcutItemId
