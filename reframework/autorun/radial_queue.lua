@@ -1,21 +1,21 @@
 -- @Author taakefyrsten
 -- https://next.nexusmods.com/profile/taakefyrsten
 -- https://github.com/jwlei/radial_queue
--- Version 2.3v2
-local debug_flag = true
+-- Version 2.4
+local debug_flag = false
 local CONFIG_PATH = "radial_queue.json"
 
 --= Configuration =============================================================================--
 local config = {
     Enable                              = true,  -- Toggle mod
     EnableNoCombatTimer                 = false,
-    ResetTimerNoCombat                  = 1, -- Time in seconds to reset item use
+    ResetTimerNoCombat                  = 1,
     EnableCombatTimer                   = false,
     ResetTimerCombat                    = 15,
-    --EnableDodgePersist                = false,
-    --DodgePersistCount                 = 0,
     EnableCancelControl                 = false,
-    EnableCancelHitReceived             = false,
+    DisableCancelHitReceived            = false,
+    DisableCancelForXDodge              = false,
+    DodgePersistCount                   = 0,
     IndicatorEnable                     = false,
     IndicatorPosX                       = 720,
     IndicatorPosY                       = 100,
@@ -62,70 +62,7 @@ re.on_draw_ui(function()
         end
 
         if config.Enable then
-            imgui.text(" ")
-
-            if imgui.checkbox("Enable combat reset timer", config.EnableCombatTimer) then
-                config.EnableCombatTimer = not config.EnableCombatTimer
-            end
             
-            if config.EnableCombatTimer then
-                local changed, new_value_ResetTimerCombat = imgui.slider_int("Combat reset timer (s)", config.ResetTimerCombat, 1, 30)
-                if changed then
-                    config.ResetTimerCombat = new_value_ResetTimerCombat
-                end
-                if imgui.is_item_hovered() then
-                    imgui.set_tooltip("Reset all action executions after X seconds regardless while in combat with a monster")
-                end
-            end
-
-            if imgui.checkbox("Enable out of combat reset timer", config.EnableNoCombatTimer) then
-                config.EnableNoCombatTimer = not config.EnableNoCombatTimer
-            end
-
-            if config.EnableNoCombatTimer then
-                local changed, new_value_ResetTimerNoCombat = imgui.slider_int("Out of combat reset timer (s)", config.ResetTimerNoCombat, 0, 30)
-                if changed then
-                    config.ResetTimerNoCombat = new_value_ResetTimerNoCombat
-                end
-                if imgui.is_item_hovered() then
-                    imgui.set_tooltip("Reset all action executions after X seconds regardless while not in combat with a monster")
-                end
-            end
-
-            imgui.text(" ")
-
-            if imgui.checkbox("Enable cancel control", config.EnableCancelControl) then
-                imgui.indent(indent_width)
-                config.EnableCancelControl = not config.EnableCancelControl
-            end
-
-            if config.EnableCancelControl then
-                imgui.indent(20)
-                if imgui.checkbox("Enable cancel on hit received", config.EnableCancelHitReceived) then
-                    config.EnableCancelHitReceived = not config.EnableCancelHitReceived
-                end
-                if imgui.is_item_hovered() then
-                    imgui.set_tooltip("Cancels item use when hit by a monster")
-                end
-                imgui.unindent(20)
-            end
-            --[[
-            if imgui.checkbox("Enable dodge persist", config.EnableDodgePersist) then
-                config.EnableDodgePersist = not config.EnableDodgePersist
-                save_config()
-                load_config()
-            end
-            
-            if config.EnableDodgePersist then
-                local changed, new_value_DodgePersistCount = imgui.slider_int("Dodge persist count", config.DodgePersistCount, 0, 5)
-                if changed then
-                    config.DodgePersistCount = new_value_DodgePersistCount
-                end
-                if imgui.is_item_hovered() then
-                    imgui.set_tooltip("Number of dodges in which the queued item will persist")
-                end
-            end
-            ]]
             imgui.text(" ")
 
             if imgui.checkbox("Enable Indicator", config.IndicatorEnable) then
@@ -204,6 +141,70 @@ re.on_draw_ui(function()
                 end
                 imgui.unindent(20)
             end  
+
+            imgui.text(" ")
+
+            if imgui.checkbox("Enable cancel additional control", config.EnableCancelControl) then
+                imgui.indent(indent_width)
+                config.EnableCancelControl = not config.EnableCancelControl
+            end
+
+            if config.EnableCancelControl then
+                imgui.indent(20)
+                if imgui.checkbox("Disable cancelling queued item on hit received", config.DisableCancelHitReceived) then
+                    config.DisableCancelHitReceived = not config.DisableCancelHitReceived
+                end
+                if imgui.is_item_hovered() then
+                    imgui.set_tooltip("Cancels item use when hit by a monster")
+                end
+
+                if imgui.checkbox("Disable cancelling queued item for X amount of dodges performed", config.DisableCancelForXDodge) then
+                config.DisableCancelForXDodge = not config.DisableCancelForXDodge
+                end
+            
+                if config.DisableCancelForXDodge then
+                    local changed, new_value_DodgePersistCount = imgui.slider_int("Dodge persist count", config.DodgePersistCount, 0, 5)
+                    if changed then
+                        config.DodgePersistCount = new_value_DodgePersistCount
+                    end
+                    if imgui.is_item_hovered() then
+                        imgui.set_tooltip("Number of dodges in which the queued item will persist")
+                    end
+                end
+
+                imgui.text(" ")
+                imgui.text("-- Legacy timers, ONLY for redundancy")
+                imgui.text("-- If you find you have to use these, please submit a bug report.")
+                if imgui.checkbox("Enable combat reset timer", config.EnableCombatTimer) then
+                    config.EnableCombatTimer = not config.EnableCombatTimer
+                end
+            
+                if config.EnableCombatTimer then
+                    local changed, new_value_ResetTimerCombat = imgui.slider_int("Combat reset timer (s)", config.ResetTimerCombat, 1, 30)
+                    if changed then
+                        config.ResetTimerCombat = new_value_ResetTimerCombat
+                    end
+                    if imgui.is_item_hovered() then
+                        imgui.set_tooltip("Reset all action executions after X seconds regardless while in combat with a monster")
+                    end
+                end
+
+                if imgui.checkbox("Enable out of combat reset timer", config.EnableNoCombatTimer) then
+                    config.EnableNoCombatTimer = not config.EnableNoCombatTimer
+                end
+
+                if config.EnableNoCombatTimer then
+                    local changed, new_value_ResetTimerNoCombat = imgui.slider_int("Out of combat reset timer (s)", config.ResetTimerNoCombat, 0, 30)
+                    if changed then
+                        config.ResetTimerNoCombat = new_value_ResetTimerNoCombat
+                    end
+                    if imgui.is_item_hovered() then
+                        imgui.set_tooltip("Reset all action executions after X seconds regardless while not in combat with a monster")
+                    end
+                end
+
+                imgui.unindent(20)
+            end
         end 
         imgui.tree_pop()
     end
@@ -241,6 +242,8 @@ local type_cSougankyo                           = sdk.find_type_definition("app.
 local type_ItemRecipeUtil                       = sdk.find_type_definition("app.ItemRecipeUtil")
 local type_Hit                                  = sdk.find_type_definition("app.Hit")
 local type_cCustomShortcutElement               = sdk.find_type_definition("app.cCustomShortcutElement")
+local type_mcHunterArmorControl 			    = sdk.find_type_definition("app.mcHunterArmorControl")
+local type_mcActiveSkillController 		        = sdk.find_type_definition("app.mcActiveSkillController")
 --app.GUI020006.requestOpenItemSlider Item bar
 --app.GUI020007 Radial M+KB
 
@@ -253,6 +256,7 @@ local isCrafting                    = false
 local isCraftingRecipeOnly          = nil
 local HunterCharacter               = nil
 local shouldSkipPad                 = true
+local rocksteadyEquipped            = false
 
 -- Crafting Information
 local craftingRecipeID              = nil
@@ -357,8 +361,7 @@ local function setItemSuccess()
        table_shortcutRecipeItem = {}
        shortcutIsEnabled = nil
        shortcutPreviousItemId = nil
-       
-       --cancelCountDodge = 0
+       cancelCountDodge = 0
 end
 
 local function cancelExecution()
@@ -467,15 +470,48 @@ local function checkCancelPotionMaxHealth(args)
     then
         setItemSuccess()
         debug("setItemSuccess() from checkCancelPotionMaxHealth")
-        --cancelCount = cancelCount + 1
     end
 end
+
+
+local function setMantleEquipped(args)
+    local hunterSkillController = sdk.to_managed_object(args[2])
+    local isMasterPlayer = hunterSkillController:get_field("_Hunter"):get_IsMaster()
+    if isMasterPlayer == false then
+        return
+    end
+
+    local skillType = hunterSkillController:get_field("_CurrentSkillType")
+    debug(skillType)
+
+    if isMasterPlayer and (rocksteadyEquipped == false or rocksteadyEquipped == nil) and skillType == 1 then
+        rocksteadyEquipped = true
+        debug("rocksteady equipped: " .. tostring(rocksteadyEquipped))
+    end
+end
+
+local function checkMantleRemoval(args)
+    local hunterSkillController = sdk.to_managed_object(args[2])
+    local isMasterPlayer = hunterSkillController:get_field("_Hunter"):get_IsMaster()
+
+    if isMasterPlayer == false then
+        return
+    end
+
+    local skillType = hunterSkillController:get_field("_CurrentSkillType")
+
+    if isMasterPlayer and rocksteadyEquipped == true and skillType == 1 then
+        rocksteadyEquipped = false
+        debug("rocksteady unequipped or expired: " .. tostring(rocksteadyEquipped))
+    end
+end
+
 
 
 --= Core functions ========================================================================--
 local function saveItem(args)
     
-    debug("saveItem")
+    --debug("saveItem")
     if config.Enable == false then 
         return 
     end
@@ -560,9 +596,9 @@ local function retryShortcut(args)
     end
 
     if (anyActualItem == true and isCrafting == true) or (anyActualItem == false and isCrafting == false) then
-        debug("retryShortcut - anyActualItem - MATCH -1")
+        --debug("retryShortcut - anyActualItem - MATCH -1")
         if itemSuccess == false then
-            debug("retryShortcut - Executing")
+            --debug("retryShortcut - Executing")
             if sourceInput == 100 and GUI020600_itemIndex_current ~= nil then
                 instance:call('execute(System.Int32)', GUI020600_itemIndex_current)
             elseif sourceInput == 55 then
@@ -600,35 +636,41 @@ local function cancelTriggerWpAction(args)
 end
 
 local function cancelTriggerReceivedHit(args)
-    if config.EnableCancelControl == false or config.EnableCancelHitReceived == false then return end
-    local hitObj = sdk.to_managed_object(args[3]):get_field("<DamageHit>k__BackingField")
-    local damageReceiver = hitObj:get_field("_Owner"):get_Name()
-    if damageReceiver == nil then return end
+    if (config.EnableCancelControl == true and config.DisableCancelHitReceived == true) then return end
 
-    if damageReceiver == "MasterPlayer" then
+    if sdk.to_managed_object(args[3]):get_field("<DamageHit>k__BackingField"):get_field("_Owner"):get_Name() ~= "MasterPlayer" 
+    and sdk.to_managed_object(args[3]):get_field("<AttackData>k__BackingField"):get_field("_FriendHitType") ~= 0  then 
+        return 
+    end
+
+    local hitInfo = sdk.to_managed_object(args[3])
+    local damageReceiverIsMasterPlayer = hitInfo:get_field("<DamageHit>k__BackingField"):get_field("_Owner"):get_Name()
+    local isFriendlyHit = getUserdataToInt(hitInfo:get_field("<AttackData>k__BackingField"):get_field("_FriendHitType"))
+    local damageType = getUserdataToInt(hitInfo:get_field("<AttackData>k__BackingField"):get_field("_DamageType"))
+
+    if damageReceiverIsMasterPlayer == "MasterPlayer" and isFriendlyHit == 0 and rocksteadyEquipped == false then
        debug("CANCELLED BY MASTERPLAYER HIT RECEIVED")
+       debug("damageType: " .. tostring(damageType))
         setItemSuccess()
     end
+
 end
 
 local function cancelTriggerDodge(args)
     local obj_hunterBadconditionsHunterCharacter = sdk.to_managed_object(args[3])
     
     if obj_hunterBadconditionsHunterCharacter:get_IsMaster() == true then
-        debug("CANCELLED BY  MASTERPLAYER DODGE")
-        setItemSuccess()
-        --[[
-        if config.EnableDodgePersist == true then
+        if (config.EnableCancelControl == true and config.DisableCancelForXDodge == true) then
             cancelCountDodge = cancelCountDodge + 1
-            debug(cancelCountDodge)
+
             if cancelCountDodge > config.DodgePersistCount then
                 debug("CANCELLED BY DODGE PERSIST")
                 setItemSuccess()
             end
         else
+            debug("CANCELLED BY MASTERPLAYER DODGE")
             setItemSuccess()
         end
-        ]]
     end
 end
 
@@ -952,6 +994,18 @@ if config.Enable == true then
     -- Get ItemID for potion cancel
     if type_HunterItemActionTable then
         sdk.hook(type_HunterItemActionTable:get_method("getItemActionTypeFromItemID"), checkCancelPotionMaxHealth, nil)
+    end
+
+   
+    -- Mantle control
+    if type_mcHunterArmorControl then
+        sdk.hook(type_mcHunterArmorControl:get_method("updateMain"), getIsRockSteadyOn, nil)
+    end
+
+    if type_mcActiveSkillController then
+        sdk.hook(type_mcActiveSkillController:get_method("startASkillEffectiveTimer"), setMantleEquipped, nil)
+        sdk.hook(type_mcActiveSkillController:get_method("endASkillWearMantleEffectiveTimer"), checkMantleRemoval, nil)
+        sdk.hook(type_mcActiveSkillController:get_method("doUnmantle"), checkMantleRemoval, nil)
     end
 end
 
