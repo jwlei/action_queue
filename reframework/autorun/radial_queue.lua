@@ -2,14 +2,14 @@
 -- https://next.nexusmods.com/profile/taakefyrsten
 -- https://github.com/jwlei/radial_queue
 -- Version 2.4
-local debug_flag = false
+
 local CONFIG_PATH = "radial_queue.json"
 
 --= Configuration =============================================================================--
 local config = {
     Enable                              = true,  -- Toggle mod
     EnableNoCombatTimer                 = false,
-    ResetTimerNoCombat                  = 1,
+    ResetTimerNoCombat                  = 1, -- Time in seconds to reset item use
     EnableCombatTimer                   = false,
     ResetTimerCombat                    = 15,
     EnableCancelControl                 = false,
@@ -29,7 +29,8 @@ local config = {
     IndicatorPulseGrowth                = 10,
     IndicatorShowInMenu                 = true,
     IndicatorMinimumPulseAlpha          = 0.5,
-    IndicatorMaxPulseAlpha              = 1.0
+    IndicatorMaxPulseAlpha              = 1.0,
+    debug_flag = true
 }
 
 local function save_config()
@@ -144,7 +145,7 @@ re.on_draw_ui(function()
 
             imgui.text(" ")
 
-            if imgui.checkbox("Enable cancel additional control", config.EnableCancelControl) then
+            if imgui.checkbox("Enable additional cancel control", config.EnableCancelControl) then
                 imgui.indent(indent_width)
                 config.EnableCancelControl = not config.EnableCancelControl
             end
@@ -174,7 +175,7 @@ re.on_draw_ui(function()
 
                 imgui.text(" ")
                 imgui.text("-- Legacy timers, ONLY for redundancy")
-                imgui.text("-- If you find you have to use these, please submit a bug report.")
+                imgui.text("-- If you find you HAVE to use these, please submit a bug report.")
                 if imgui.checkbox("Enable combat reset timer", config.EnableCombatTimer) then
                     config.EnableCombatTimer = not config.EnableCombatTimer
                 end
@@ -204,6 +205,15 @@ re.on_draw_ui(function()
                 end
 
                 imgui.unindent(20)
+            end
+
+            imgui.text(" ")
+
+            if imgui.checkbox("Debug", config.debug_flag) then
+            config.debug_flag = not config.debug_flag
+            end
+            if imgui.is_item_hovered() then
+                imgui.set_tooltip("Prints debug information to the REFramework debug console")
             end
         end 
         imgui.tree_pop()
@@ -257,6 +267,7 @@ local isCraftingRecipeOnly          = nil
 local HunterCharacter               = nil
 local shouldSkipPad                 = true
 local rocksteadyEquipped            = false
+local executing = false
 
 -- Crafting Information
 local craftingRecipeID              = nil
@@ -271,15 +282,28 @@ local resetTime                     = nil
 local loadedTable                   = nil
 local sourceInput                   = nil
 local table_shortcutRecipeItem      = {}
+local shouldThrottle = true    
+local last_debug_times = {}
 --local cancelCountDodge = 0
 
 
 --= Utility functions =======================================================================--
 local function debug(msg)
-    if debug_flag == true then
-        local timestamp = os.date("%H:%M:%S")
-        print('[RQ]' .. '[' .. timestamp .. ']'.. '[DEBUG] ' .. tostring(msg))
+    if not config.debug_flag then return end
+    if not executing then return end
+
+    local msg_key = tostring(msg)
+    local current_time = os.time()
+
+    if shouldThrottle then
+        if last_debug_times[msg_key] == current_time then
+            return
+        end
+        last_debug_times[msg_key] = current_time
     end
+
+    local timestamp = os.date("%H:%M:%S")
+    print('[RQ][' .. timestamp .. '][DEBUG] ' .. msg_key)
 end
 
 local function getHunterCharacter() 
@@ -362,6 +386,7 @@ local function setItemSuccess()
        shortcutIsEnabled = nil
        shortcutPreviousItemId = nil
        cancelCountDodge = 0
+       executing = false
 end
 
 local function cancelExecution()
@@ -384,7 +409,7 @@ local function checkIsShortcutSelected(args)
         shortcutItemId = getUserdataToInt(sdk.to_managed_object(args[2]):get_field("<ItemId>k__BackingField"))
 
         if shortcutItemId == -1 then 
-            debug("Shortcut itemId is -1, cancelling")
+            debug("Shortcut itemId is -1, cancelling further execution")
             setItemSuccess()
         end
 
@@ -392,7 +417,7 @@ local function checkIsShortcutSelected(args)
             shortcutPreviousItemId = shortcutItemId
         elseif shortcutPreviousItemId ~= shortcutItemId then
             if sourceInput == 55 then
-                debug("Shortcut itemId changed, cancelling")
+                debug("Shortcut itemId changed, cancelling execution")
                 setItemSuccess()
             end
             shortcutPreviousItemId = shortcutItemId
@@ -526,6 +551,7 @@ local function saveItem(args)
 
     itemSuccess = false
     shouldSkipPad = true
+    executing = true
     --DodgePersistCount = 0
 end
 
@@ -573,7 +599,7 @@ local function retryShortcut(args)
     end
 
     if sourceInput == 55 and shortcutIsEnabled == false then
-        debug("retryShortcut - Shortcut is disabled, cancelling")
+        debug("Shortcut is disabled, cancelling further execution")
         setItemSuccess()
     end
 
@@ -610,7 +636,7 @@ local function retryShortcut(args)
             return
         end 
     else
-        debug("retryShortcut - anyActualItem - NO MATCH, ONLY RECIPES")
+        debug("Crafting recipe detected, cancelling execution")
         setItemSuccess()
     end
 end
@@ -621,7 +647,7 @@ local function cancelTriggerAttack(args)
     local obj_weapon = sdk.to_managed_object(args[2])
     
     if obj_weapon:get_IsMaster() == true then
-        debug("CANCELLED BY MASTERPLAYER ATTACK")
+        --debug("CANCELLED BY MASTERPLAYER ATTACK")
         setItemSuccess()
     end
 end
@@ -642,15 +668,27 @@ local function cancelTriggerReceivedHit(args)
     and sdk.to_managed_object(args[3]):get_field("<AttackData>k__BackingField"):get_field("_FriendHitType") ~= 0  then 
         return 
     end
-
+   
     local hitInfo = sdk.to_managed_object(args[3])
     local damageReceiverIsMasterPlayer = hitInfo:get_field("<DamageHit>k__BackingField"):get_field("_Owner"):get_Name()
     local isFriendlyHit = getUserdataToInt(hitInfo:get_field("<AttackData>k__BackingField"):get_field("_FriendHitType"))
     local damageType = getUserdataToInt(hitInfo:get_field("<AttackData>k__BackingField"):get_field("_DamageType"))
+    local attack = getUserdataToInt(hitInfo:get_field("<AttackData>k__BackingField"):get_field("_Attack"))
+    local damageLevel = getUserdataToInt(hitInfo:get_field("<AttackData>k__BackingField"):get_field("_DamageLevel"))
+    local StageDamageType = getUserdataToInt(hitInfo:get_field("<AttackData>k__BackingField"):get_field("_StageDamageType"))
 
-    if damageReceiverIsMasterPlayer == "MasterPlayer" and isFriendlyHit == 0 and rocksteadyEquipped == false then
+    if isFriendlyHit ~= 0 then return end
+    if damageType == -1 then return end
+    if attack == 0 then return end
+
+    if damageReceiverIsMasterPlayer == "MasterPlayer" and rocksteadyEquipped == false then
        debug("CANCELLED BY MASTERPLAYER HIT RECEIVED")
+       debug("----- ATTACK DATA -----")
        debug("damageType: " .. tostring(damageType))
+       debug("attack: " .. tostring(attack))
+       debug("damageLevel: " .. tostring(damageLevel))
+       debug("StageDamageType: " .. tostring(StageDamageType))
+       debug("-----------------------")
         setItemSuccess()
     end
 
