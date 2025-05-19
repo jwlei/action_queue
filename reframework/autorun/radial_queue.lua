@@ -1,7 +1,7 @@
 -- @Author taakefyrsten
 -- https://next.nexusmods.com/profile/taakefyrsten
 -- https://github.com/jwlei/radial_queue
--- Version 2.4
+-- Version 2.5
 
 local CONFIG_PATH = "radial_queue.json"
 
@@ -16,6 +16,7 @@ local config = {
     DisableCancelHitReceived            = false,
     DisableCancelForXDodge              = false,
     DodgePersistCount                   = 0,
+    IgnoreDisabledShortcut              = false,
     IndicatorEnable                     = false,
     IndicatorPosX                       = 720,
     IndicatorPosY                       = 100,
@@ -149,9 +150,14 @@ re.on_draw_ui(function()
                 imgui.indent(indent_width)
                 config.EnableCancelControl = not config.EnableCancelControl
             end
+            if imgui.is_item_hovered() then
+                imgui.set_tooltip("These are optional settings that extend beyond the core functionality to allow for additional customization. However, they have not been as extensively tested and may contain bugs or unintended side effects.")
+            end
 
             if config.EnableCancelControl then
                 imgui.indent(20)
+
+
                 if imgui.checkbox("Disable cancelling queued item on hit received", config.DisableCancelHitReceived) then
                     config.DisableCancelHitReceived = not config.DisableCancelHitReceived
                 end
@@ -171,6 +177,13 @@ re.on_draw_ui(function()
                     if imgui.is_item_hovered() then
                         imgui.set_tooltip("Number of dodges in which the queued item will persist")
                     end
+                end
+
+                if imgui.checkbox("RADIAL MENU ONLY - Force disabled(greyed out) shortcuts", config.IgnoreDisabledShortcut) then
+                    config.IgnoreDisabledShortcut = not config.IgnoreDisabledShortcut
+                end
+                if imgui.is_item_hovered() then
+                    imgui.set_tooltip("Ignores the check that stops the process when a shortcut is disabled(greyed out). E.g. a trap that you cannot place at that specific spot, can let you queue up potion while e.g. sharpening your weapon")
                 end
 
                 imgui.text(" ")
@@ -267,7 +280,7 @@ local isCraftingRecipeOnly          = nil
 local HunterCharacter               = nil
 local shouldSkipPad                 = true
 local rocksteadyEquipped            = false
-local executing = false
+local executing                     = false
 
 -- Crafting Information
 local craftingRecipeID              = nil
@@ -276,15 +289,22 @@ local GUI020600_itemIndex_current   = nil
 
 -- Counters and Time
 local cancelCount                   = 0
+local cancelCountDodge              = 0
 local resetTime                     = nil
+
+-- Shortcut related
+local table_shortcutRecipeItem      = {}
+local shortcutIsEnabled             = nil
+local shortcutIsSelected            = nil
+local shortcutItemId                = nil
+local shortcutPreviousItemId        = nil
 
 -- Miscellaneous Information
 local loadedTable                   = nil
 local sourceInput                   = nil
-local table_shortcutRecipeItem      = {}
-local shouldThrottle = true    
-local last_debug_times = {}
---local cancelCountDodge = 0
+local shouldThrottle                = true    
+local last_debug_times              = {}
+
 
 
 --= Utility functions =======================================================================--
@@ -324,9 +344,8 @@ end
 local function getHunterCharacterCombat()
     HunterCharacter = getHunterCharacter()
 
-    if HunterCharacter:call("get_IsCombat()") == true 
+    if HunterCharacter:call("get_IsCombat()") == true  
         or HunterCharacter:call("get_IsCombatBoss()") == true then
-        --HunterCharacter:call("get_IsHalfCombat()")
         return true
     else
         return false
@@ -396,9 +415,6 @@ local function cancelExecution()
     end
 end
 
-local shortcutIsSelected = nil
-local shortcutItemId = nil
-local shortcutPreviousItemId = nil
 local function checkIsShortcutSelected(args)
     if args == nil then
         return
@@ -409,8 +425,10 @@ local function checkIsShortcutSelected(args)
         shortcutItemId = getUserdataToInt(sdk.to_managed_object(args[2]):get_field("<ItemId>k__BackingField"))
 
         if shortcutItemId == -1 then 
-            debug("Shortcut itemId is -1, cancelling further execution")
-            setItemSuccess()
+            if config.IgnoreDisabledShortcut == false then
+                debug("Shortcut itemId is -1, cancelling further execution")
+                setItemSuccess()
+            end
         end
 
         if shortcutPreviousItemId == nil then
@@ -428,7 +446,6 @@ local function checkIsShortcutSelected(args)
     
 end
 
-local shortcutIsEnabled = nil
 local function checkIsShortcutEnabled(retval)
     if shortcutIsSelected == true then
         local ret = getUserdataToInt(sdk.to_ptr(retval))
@@ -536,7 +553,9 @@ end
 --= Core functions ========================================================================--
 local function saveItem(args)
     
-    --debug("saveItem")
+    if executing == false then
+        debug("Saving item")
+    end
     if config.Enable == false then 
         return 
     end
@@ -552,7 +571,6 @@ local function saveItem(args)
     itemSuccess = false
     shouldSkipPad = true
     executing = true
-    --DodgePersistCount = 0
 end
 
 local function checkCraftingDetails(args)
@@ -600,7 +618,9 @@ local function retryShortcut(args)
 
     if sourceInput == 55 and shortcutIsEnabled == false then
         debug("Shortcut is disabled, cancelling further execution")
-        setItemSuccess()
+        if config.IgnoreDisabledShortcut == false then
+            setItemSuccess()
+        end
     end
 
     checkIfTimerCancel()
@@ -624,7 +644,10 @@ local function retryShortcut(args)
     if (anyActualItem == true and isCrafting == true) or (anyActualItem == false and isCrafting == false) then
         --debug("retryShortcut - anyActualItem - MATCH -1")
         if itemSuccess == false then
-            --debug("retryShortcut - Executing")
+            if executing == true then
+                debug("Retrying execution of saved item")
+            end    
+
             if sourceInput == 100 and GUI020600_itemIndex_current ~= nil then
                 instance:call('execute(System.Int32)', GUI020600_itemIndex_current)
             elseif sourceInput == 55 then
