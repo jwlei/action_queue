@@ -183,7 +183,7 @@ re.on_draw_ui(function()
                     config.IgnoreDisabledShortcut = not config.IgnoreDisabledShortcut
                 end
                 if imgui.is_item_hovered() then
-                    imgui.set_tooltip("Ignores the check that stops the process when a shortcut is disabled(greyed out). E.g. a trap that you cannot place at that specific spot, can let you queue up potion while e.g. sharpening your weapon")
+                    imgui.set_tooltip("Ignores the check that stops the process when a shortcut is disabled(greyed out). E.g. a trap that you cannot place at that specific spot.")
                 end
 
                 imgui.text(" ")
