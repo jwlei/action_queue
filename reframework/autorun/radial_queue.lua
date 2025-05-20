@@ -31,7 +31,7 @@ local config = {
     IndicatorShowInMenu                 = true,
     IndicatorMinimumPulseAlpha          = 0.5,
     IndicatorMaxPulseAlpha              = 1.0,
-    debug_flag = true
+    debug_flag                          = false
 }
 
 local function save_config()
@@ -1069,5 +1069,3 @@ if config.Enable == true then
         sdk.hook(type_mcActiveSkillController:get_method("doUnmantle"), checkMantleRemoval, nil)
     end
 end
-
-
