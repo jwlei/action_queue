@@ -1,7 +1,7 @@
 -- @Author taakefyrsten
 -- https://next.nexusmods.com/profile/taakefyrsten
 -- https://github.com/jwlei/radial_queue
--- Version 2.5
+-- Version 2.6
 
 local CONFIG_PATH = "radial_queue.json"
 
@@ -415,6 +415,19 @@ local function cancelExecution()
     end
 end
 
+local function cancelOnShortCutId(int)
+    if int == -1 
+    or int == 128 
+    or int == 129 
+    or int == 130 
+    then
+        debug("Cancelling shortcutItemId " .. int)
+        return true
+    end
+    return false
+end
+
+
 local function checkIsShortcutSelected(args)
     if args == nil then
         return
@@ -423,10 +436,10 @@ local function checkIsShortcutSelected(args)
     if sdk.to_managed_object(args[2]):get_field("<_Selected>k__BackingField") == true then 
         shortcutIsSelected = true
         shortcutItemId = getUserdataToInt(sdk.to_managed_object(args[2]):get_field("<ItemId>k__BackingField"))
-
-        if shortcutItemId == -1 then 
+        
+        if cancelOnShortCutId(shortcutItemId) == true then 
             if config.IgnoreDisabledShortcut == false then
-                debug("Shortcut itemId is -1, cancelling further execution")
+                
                 setItemSuccess()
             end
         end
@@ -1069,3 +1082,5 @@ if config.Enable == true then
         sdk.hook(type_mcActiveSkillController:get_method("doUnmantle"), checkMantleRemoval, nil)
     end
 end
+
+
