@@ -1,7 +1,7 @@
 -- @Author taakefyrsten
 -- https://next.nexusmods.com/profile/taakefyrsten
 -- https://github.com/jwlei/radial_queue
--- Version 2.6
+-- Version 2.6v2
 
 local CONFIG_PATH = "radial_queue.json"
 
@@ -31,7 +31,7 @@ local config = {
     IndicatorShowInMenu                 = true,
     IndicatorMinimumPulseAlpha          = 0.5,
     IndicatorMaxPulseAlpha              = 1.0,
-    debug_flag                          = false
+    debug_flag                          = true
 }
 
 local function save_config()
@@ -416,10 +416,11 @@ local function cancelExecution()
 end
 
 local function cancelOnShortCutId(int)
-    if int == -1 
-    or int == 128 
-    or int == 129 
-    or int == 130 
+    if 
+        int == -1 
+    or  int == 780 --SSF
+    or  int == 781 --SSF
+    or  int == 782 --SSF
     then
         debug("Cancelling shortcutItemId " .. int)
         return true
@@ -435,7 +436,28 @@ local function checkIsShortcutSelected(args)
 
     if sdk.to_managed_object(args[2]):get_field("<_Selected>k__BackingField") == true then 
         shortcutIsSelected = true
-        shortcutItemId = getUserdataToInt(sdk.to_managed_object(args[2]):get_field("<ItemId>k__BackingField"))
+        --shortcutItemId = getUserdataToInt(sdk.to_managed_object(args[2]):get_field("<ItemId>k__BackingField"))
+        shortcutItemId = sdk.to_managed_object(args[2]):get_ItemId()
+        --local get_ItemId = sdk.to_managed_object(args[2]):get_ItemId()
+        debug("checkIsShortcutSelected ItemId: " .. shortcutItemId)
+        local s_type                = getUserdataToInt(sdk.to_managed_object(args[2]):get_field("<Type>k__BackingField"))
+        local s_recipeId            = sdk.to_managed_object(args[2]):get_field("<RecipeId>k__BackingField")
+        local s_CommunicationId     = sdk.to_managed_object(args[2]):get_field("<CommunicationId>k__BackingField")
+        local _ShortcutItemParam    = sdk.to_managed_object(args[2]):get_field("<_ShortcutItemParam>k__BackingField")
+        local _param_type           = getUserdataToInt(_ShortcutItemParam:get_field("Type"))
+        local _param_itemId         = getUserdataToInt(_ShortcutItemParam:get_field("Value"))
+
+        --debug("checkIsShortcutSelected---------------------------")
+        --debug("get_ItemId: " .. shortcutItemId)
+        --debug("Shortcut itemId: " .. tostring(shortcutItemId))
+        --debug("Shortcut recipeId: " .. tostring(s_recipeId)) 
+        --debug("Shortcut type: " .. tostring(s_type))
+        --debug("Shortcut communicationId: " .. tostring(s_CommunicationId))
+        --debug("Shortcut _param_type: " .. tostring(_param_type))
+        --debug("Shortcut _param_itemId: " .. tostring(_param_itemId))
+        --debug("checkIsShortcutSelected------------------------END") 
+
+        
         
         if cancelOnShortCutId(shortcutItemId) == true then 
             if config.IgnoreDisabledShortcut == false then
@@ -518,6 +540,7 @@ local function checkCancelPotionMaxHealth(args)
 
     -- Todo, check hunter health if should cancel
     local itemId = getUserdataToInt(args[2])
+    debug("hunterActionId: " .. tostring(itemId))
     
     if     itemId == 1 --Potion
         or itemId == 2 --Mega Potion
@@ -638,14 +661,14 @@ local function retryShortcut(args)
 
     checkIfTimerCancel()
 
-    local anyActualItem = false
+    local recipeUnavailable = false
     if table_shortcutRecipeItem ~= nil then
         for _, entry in ipairs(table_shortcutRecipeItem) do
             if type(entry) == "table" then
-                --debug("Entry: itemId = " .. tostring(entry.itemId) .. ", recipeId = " .. tostring(entry.recipeId))
+                debug("Entry: itemId = " .. tostring(entry.itemId) .. ", recipeId = " .. tostring(entry.recipeId))
 
                 if (entry.recipeId == -1 or entry.recipeId == "-1") then
-                    anyActualItem = true
+                    recipeUnavailable = true
                     break
                 end
             end
@@ -654,8 +677,8 @@ local function retryShortcut(args)
         debug("table_shortcutRecipeItem is nil")
     end
 
-    if (anyActualItem == true and isCrafting == true) or (anyActualItem == false and isCrafting == false) then
-        --debug("retryShortcut - anyActualItem - MATCH -1")
+    if (recipeUnavailable == true and isCrafting == true) or (recipeUnavailable == false and isCrafting == false) then
+        --debug("retryShortcut - recipeUnavailable - MATCH -1")
         if itemSuccess == false then
             if executing == true then
                 debug("Retrying execution of saved item")
@@ -707,11 +730,11 @@ local function cancelTriggerReceivedHit(args)
    
     local hitInfo = sdk.to_managed_object(args[3])
     local damageReceiverIsMasterPlayer = hitInfo:get_field("<DamageHit>k__BackingField"):get_field("_Owner"):get_Name()
-    local isFriendlyHit = getUserdataToInt(hitInfo:get_field("<AttackData>k__BackingField"):get_field("_FriendHitType"))
-    local damageType = getUserdataToInt(hitInfo:get_field("<AttackData>k__BackingField"):get_field("_DamageType"))
-    local attack = getUserdataToInt(hitInfo:get_field("<AttackData>k__BackingField"):get_field("_Attack"))
-    local damageLevel = getUserdataToInt(hitInfo:get_field("<AttackData>k__BackingField"):get_field("_DamageLevel"))
-    local StageDamageType = getUserdataToInt(hitInfo:get_field("<AttackData>k__BackingField"):get_field("_StageDamageType"))
+    local isFriendlyHit     = getUserdataToInt(hitInfo:get_field("<AttackData>k__BackingField"):get_field("_FriendHitType"))
+    local damageType        = getUserdataToInt(hitInfo:get_field("<AttackData>k__BackingField"):get_field("_DamageType"))
+    local attack            = getUserdataToInt(hitInfo:get_field("<AttackData>k__BackingField"):get_field("_Attack"))
+    local damageLevel       = getUserdataToInt(hitInfo:get_field("<AttackData>k__BackingField"):get_field("_DamageLevel"))
+    local StageDamageType   = getUserdataToInt(hitInfo:get_field("<AttackData>k__BackingField"):get_field("_StageDamageType"))
 
     if isFriendlyHit ~= 0 then return end
     if damageType == -1 then return end
