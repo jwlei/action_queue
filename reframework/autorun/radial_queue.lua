@@ -1,8 +1,9 @@
 -- @Author taakefyrsten
 -- https://next.nexusmods.com/profile/taakefyrsten
 -- https://github.com/jwlei/radial_queue
--- Version 2.6v2
+-- Version 2.7
 
+local VERSION = "2.7"
 local CONFIG_PATH = "radial_queue.json"
 
 --= Configuration =============================================================================--
@@ -308,9 +309,9 @@ local last_debug_times              = {}
 
 
 --= Utility functions =======================================================================--
-local function debug(msg)
+local function debug(msg, override)
     if not config.debug_flag then return end
-    if not executing then return end
+    if not executing and not override then return end
 
     local msg_key = tostring(msg)
     local current_time = os.time()
@@ -325,6 +326,7 @@ local function debug(msg)
     local timestamp = os.date("%H:%M:%S")
     print('[RQ][' .. timestamp .. '][DEBUG] ' .. msg_key)
 end
+debug("Radial queue v" .. VERSION .. " loaded.", true)
 
 local function getHunterCharacter() 
     local MasterPlayer = sdk.get_managed_singleton("app.PlayerManager"):get_field("_PlayerList")[0]
@@ -391,38 +393,36 @@ local function updateShortcut(retval)
     instance_activeShortcut:call("update()")
 end
 
-local function setItemSuccess()
-       itemSuccess = true
-       resetTime = nil
-       sourceInput = nil 
-       GUI020600_itemIndex_current = nil
-       instance = nil
-       isCrafting = false
-       isCraftingRecipeOnly = nil
-       craftingRecipeID = nil
-       instance_activeShortcut = nil
-       table_shortcutRecipeItem = {}
-       shortcutIsEnabled = nil
-       shortcutPreviousItemId = nil
-       cancelCountDodge = 0
-       executing = false
-end
-
-local function cancelExecution()
-    if itemSuccess == false then
-        setItemSuccess()
-        debug("setItemSuccess() from cancelExecution")
+local function stopExecution(msg)
+    if msg then 
+        debug("STOP - " .. msg)
     end
+
+    itemSuccess = true
+    resetTime = nil
+    sourceInput = nil 
+    GUI020600_itemIndex_current = nil
+    instance = nil
+    isCrafting = false
+    isCraftingRecipeOnly = nil
+    craftingRecipeID = nil
+    instance_activeShortcut = nil
+    table_shortcutRecipeItem = {}
+    shortcutIsEnabled = nil
+    shortcutPreviousItemId = nil
+    cancelCountDodge = 0
+    executing = false
+
+    
 end
 
-local function cancelOnShortCutId(int)
+local function cancelOnShortcutItemId(_itemId)
     if 
-        int == -1 
-    or  int == 780 --SSF
-    or  int == 781 --SSF
-    or  int == 782 --SSF
+        _itemId == -1 
+    or  _itemId == 780 --SSF
+    or  _itemId == 781 --SSF
+    or  _itemId == 782 --SSF
     then
-        debug("Cancelling shortcutItemId " .. int)
         return true
     end
     return false
@@ -437,15 +437,15 @@ local function checkIsShortcutSelected(args)
     if sdk.to_managed_object(args[2]):get_field("<_Selected>k__BackingField") == true then 
         shortcutIsSelected = true
         --shortcutItemId = getUserdataToInt(sdk.to_managed_object(args[2]):get_field("<ItemId>k__BackingField"))
-        shortcutItemId = sdk.to_managed_object(args[2]):get_ItemId()
+        shortcutItemId = sdk.to_managed_object(args[2]):call("get_ItemId()")
         --local get_ItemId = sdk.to_managed_object(args[2]):get_ItemId()
-        debug("checkIsShortcutSelected ItemId: " .. shortcutItemId)
-        local s_type                = getUserdataToInt(sdk.to_managed_object(args[2]):get_field("<Type>k__BackingField"))
-        local s_recipeId            = sdk.to_managed_object(args[2]):get_field("<RecipeId>k__BackingField")
-        local s_CommunicationId     = sdk.to_managed_object(args[2]):get_field("<CommunicationId>k__BackingField")
-        local _ShortcutItemParam    = sdk.to_managed_object(args[2]):get_field("<_ShortcutItemParam>k__BackingField")
-        local _param_type           = getUserdataToInt(_ShortcutItemParam:get_field("Type"))
-        local _param_itemId         = getUserdataToInt(_ShortcutItemParam:get_field("Value"))
+        --debug("checkIsShortcutSelected - ItemId: " .. shortcutItemId)
+        --local s_type                = getUserdataToInt(sdk.to_managed_object(args[2]):get_field("<Type>k__BackingField"))
+        --local s_recipeId            = sdk.to_managed_object(args[2]):get_field("<RecipeId>k__BackingField")
+        --local s_CommunicationId     = sdk.to_managed_object(args[2]):get_field("<CommunicationId>k__BackingField")
+        --local _ShortcutItemParam    = sdk.to_managed_object(args[2]):get_field("<_ShortcutItemParam>k__BackingField")
+        --local _param_type           = getUserdataToInt(_ShortcutItemParam:get_field("Type"))
+        --local _param_itemId         = getUserdataToInt(_ShortcutItemParam:get_field("Value"))
 
         --debug("checkIsShortcutSelected---------------------------")
         --debug("get_ItemId: " .. shortcutItemId)
@@ -459,10 +459,10 @@ local function checkIsShortcutSelected(args)
 
         
         
-        if cancelOnShortCutId(shortcutItemId) == true then 
+        if cancelOnShortcutItemId(shortcutItemId) == true then 
             if config.IgnoreDisabledShortcut == false then
                 
-                setItemSuccess()
+                stopExecution("Cancel by ID: " .. tostring(shortcutItemId))
             end
         end
 
@@ -470,8 +470,7 @@ local function checkIsShortcutSelected(args)
             shortcutPreviousItemId = shortcutItemId
         elseif shortcutPreviousItemId ~= shortcutItemId then
             if sourceInput == 55 then
-                debug("Shortcut itemId changed, cancelling execution")
-                setItemSuccess()
+                stopExecution("ShortcutItemId changed")
             end
             shortcutPreviousItemId = shortcutItemId
         end
@@ -520,8 +519,7 @@ local function checkIfTimerCancel()
 
        local currentTime = os.time()
        if resetTime ~= nil and currentTime >= resetTime then
-           setItemSuccess()
-           debug("setItemSuccess() from timer")
+           stopExecution("checkIfTimerCancel")
            resetTime = nil
        end
     end
@@ -540,14 +538,13 @@ local function checkCancelPotionMaxHealth(args)
 
     -- Todo, check hunter health if should cancel
     local itemId = getUserdataToInt(args[2])
-    debug("hunterActionId: " .. tostring(itemId))
+    --debug("hunterActionId: " .. tostring(itemId))
     
     if     itemId == 1 --Potion
         or itemId == 2 --Mega Potion
         and health == maxHealth
     then
-        setItemSuccess()
-        debug("setItemSuccess() from checkCancelPotionMaxHealth")
+        stopExecution("checkCancelPotionMaxHealth")
     end
 end
 
@@ -564,7 +561,7 @@ local function setMantleEquipped(args)
 
     if isMasterPlayer and (rocksteadyEquipped == false or rocksteadyEquipped == nil) and skillType == 1 then
         rocksteadyEquipped = true
-        debug("rocksteady equipped: " .. tostring(rocksteadyEquipped))
+        debug("Rocksteady equipped: " .. tostring(rocksteadyEquipped))
     end
 end
 
@@ -580,7 +577,7 @@ local function checkMantleRemoval(args)
 
     if isMasterPlayer and rocksteadyEquipped == true and skillType == 1 then
         rocksteadyEquipped = false
-        debug("rocksteady unequipped or expired: " .. tostring(rocksteadyEquipped))
+        debug("Rocksteady unequipped or expired: " .. tostring(rocksteadyEquipped))
     end
 end
 
@@ -590,7 +587,8 @@ end
 local function saveItem(args)
     
     if executing == false then
-        debug("Saving item")
+        executing = true
+        debug("START - ItemID: " .. tostring(shortcutItemId))
     end
     if config.Enable == false then 
         return 
@@ -606,12 +604,10 @@ local function saveItem(args)
 
     itemSuccess = false
     shouldSkipPad = true
-    executing = true
 end
 
 local function checkCraftingDetails(args)
-    debug("checkCraft")
-    
+
     local itemAmount = sdk.to_int64(args[4])
     if not itemAmount then return end
     
@@ -621,8 +617,7 @@ local function checkCraftingDetails(args)
     debug("checkCraftingDetailsId: " .. tostring(craftingRecipeID))
    
     if itemAmount >= 2 then
-        debug("ITEM SUCCESS FROM checkCraftingDetails")
-        setItemSuccess()
+        stopExecution("checkCraftingDetails")
     else
         return
     end  
@@ -653,9 +648,8 @@ local function retryShortcut(args)
     end
 
     if sourceInput == 55 and shortcutIsEnabled == false then
-        debug("Shortcut is disabled, cancelling further execution")
         if config.IgnoreDisabledShortcut == false then
-            setItemSuccess()
+            stopExecution("Shortcut is disabled")
         end
     end
 
@@ -665,7 +659,7 @@ local function retryShortcut(args)
     if table_shortcutRecipeItem ~= nil then
         for _, entry in ipairs(table_shortcutRecipeItem) do
             if type(entry) == "table" then
-                debug("Entry: itemId = " .. tostring(entry.itemId) .. ", recipeId = " .. tostring(entry.recipeId))
+                --debug("Entry: itemId = " .. tostring(entry.itemId) .. ", recipeId = " .. tostring(entry.recipeId))
 
                 if (entry.recipeId == -1 or entry.recipeId == "-1") then
                     recipeUnavailable = true
@@ -681,7 +675,7 @@ local function retryShortcut(args)
         --debug("retryShortcut - recipeUnavailable - MATCH -1")
         if itemSuccess == false then
             if executing == true then
-                debug("Retrying execution of saved item")
+                debug("RETRY - ItemId: " .. tostring(shortcutItemId))
             end    
 
             if sourceInput == 100 and GUI020600_itemIndex_current ~= nil then
@@ -695,8 +689,7 @@ local function retryShortcut(args)
             return
         end 
     else
-        debug("Crafting recipe detected, cancelling execution")
-        setItemSuccess()
+        stopExecution("Crafting recipe detected")
     end
 end
 
@@ -706,8 +699,7 @@ local function cancelTriggerAttack(args)
     local obj_weapon = sdk.to_managed_object(args[2])
     
     if obj_weapon:get_IsMaster() == true then
-        --debug("CANCELLED BY MASTERPLAYER ATTACK")
-        setItemSuccess()
+        stopExecution("cancelTriggerAttack")
     end
 end
 
@@ -715,8 +707,7 @@ local function cancelTriggerWpAction(args)
     local isMasterPlayer = sdk.to_managed_object(args[2]):get_field("_Character")
     
     if isMasterPlayer:get_IsMaster() == true then
-        debug("CANCELLED BY MASTERPLAYER WPXX")
-        setItemSuccess()
+        stopExecution("cancelTriggerWpAction")
     end
 end
 
@@ -741,14 +732,13 @@ local function cancelTriggerReceivedHit(args)
     if attack == 0 then return end
 
     if damageReceiverIsMasterPlayer == "MasterPlayer" and rocksteadyEquipped == false then
-       debug("CANCELLED BY MASTERPLAYER HIT RECEIVED")
        debug("----- ATTACK DATA -----")
-       debug("damageType: " .. tostring(damageType))
-       debug("attack: " .. tostring(attack))
-       debug("damageLevel: " .. tostring(damageLevel))
-       debug("StageDamageType: " .. tostring(StageDamageType))
+       debug("-- damageType: " .. tostring(damageType))
+       debug("-- attack: " .. tostring(attack))
+       debug("-- damageLevel: " .. tostring(damageLevel))
+       debug("-- StageDamageType: " .. tostring(StageDamageType))
        debug("-----------------------")
-        setItemSuccess()
+       stopExecution("cancelTriggerReceivedHit")
     end
 
 end
@@ -761,12 +751,10 @@ local function cancelTriggerDodge(args)
             cancelCountDodge = cancelCountDodge + 1
 
             if cancelCountDodge > config.DodgePersistCount then
-                debug("CANCELLED BY DODGE PERSIST")
-                setItemSuccess()
+                stopExecution("DodgePersistCount")
             end
         else
-            debug("CANCELLED BY MASTERPLAYER DODGE")
-            setItemSuccess()
+            stopExecution("cancelTriggerDodge")
         end
     end
 end
@@ -775,8 +763,7 @@ local function cancelTriggerSeikret(args)
     local isMasterPlayer = sdk.to_managed_object(args[2]):get_field("_Character")
 
     if isMasterPlayer:get_IsMaster() == true then
-        debug("CANCELLED BY MASTERPLAYER SEIKRET")
-        setItemSuccess()
+        stopExecution("cancelTriggerSeikret")
     end
 end
 
@@ -784,8 +771,7 @@ local function cancelTriggerSeikretDismount(args)
     local isMasterPlayer = sdk.to_managed_object(args[2]):get_field("<Chara>k__BackingField")
 
     if isMasterPlayer:get_IsMaster() == true then
-        debug("CANCELLED BY MASTERPLAYER SEIKRET DISMOUNT BASE")
-        setItemSuccess()
+        stopExecution("cancelTriggerSeikretDismount")
     end
 end
 
@@ -793,8 +779,7 @@ local function cancelTriggerSlingerLoad(args)
     local isMasterPlayer = sdk.to_managed_object(args[2]):get_field("_Character")
     
     if isMasterPlayer:get_IsMaster() == true then
-        debug("CANCELLED BY MASTERPLAYER SLINGER LOAD")
-        setItemSuccess()
+        stopExecution("cancelTriggerSlingerLoad")
     end
 end
 
@@ -802,16 +787,14 @@ local function cancelTriggerOtomo(args)
     local isMasterPlayer = sdk.to_managed_object(args[2]):get_field("_OwnerHunter")
 
     if isMasterPlayer:get_IsMaster() == true then
-        debug("CANCELLED BY MASTERPLAYER EMOTE")
-        setItemSuccess()
+        stopExecution("cancelTriggerOtomo(emote)")
     end
 end
 
 local function cancelTriggerBonfire(args)
     local isMasterPlayer = sdk.to_managed_object(args[2]):get_field("_Chara")
     if isMasterPlayer:get_IsMaster() == true then
-        debug("CANCELLED BY MASTERPLAYER BONFIRE")
-        setItemSuccess()
+        stopExecution("cancelTriggerBonfire")
     end
 end
 
@@ -819,15 +802,13 @@ local function cancelTriggerFishing(args)
 
     local isMasterPlayer = sdk.to_managed_object(args[2]):get_field("Chara")
     if isMasterPlayer:get_IsMaster() == true then
-       debug("CANCELLED BY MASTERPLAYER FISHING")
-        setItemSuccess()
+        stopExecution("cancelTriggerFishing")
     end
 end
 
 local function cancelTriggerForce(args)
-    debug("CANCELLED BY cancelTriggerForce")
     itemSuccess = false
-    setItemSuccess()
+    stopExecution("cancelTriggerForce")
 end
 
 
@@ -928,14 +909,14 @@ if config.Enable == true then
     --= Main loop =========================================================================--
     -- Radial menu
     if type_GUI020008 then
-        sdk.hook(type_GUI020008:get_method('onOpenApp'), cancelExecution, function(retval) debug("Canceled by type_GUI020008") end)
+        sdk.hook(type_GUI020008:get_method('onOpenApp'), stopExecution("type_GUI020008_onOpenApp"), nil)
         sdk.hook(type_GUI020008:get_method("useActiveItem"), saveItem, nil)
     end
 
     -- M+KB
     if type_GUI020600 then
         sdk.hook(type_GUI020600:get_method("execute"), saveItem, nil)
-        sdk.hook(type_GUI020600:get_method("onHudClose"), cancelExecution, nil)
+        sdk.hook(type_GUI020600:get_method("onHudClose"), stopExecution("type_GUI020600_onHudClose"), nil)
     end
 
     --Check crafting itemAmount for logic
@@ -956,7 +937,7 @@ if config.Enable == true then
 
     -- Item used successfully
     if type_HunterExtendBase then
-        sdk.hook(type_HunterExtendBase:get_method("successItem(app.ItemDef.ID, System.Int32, System.Boolean, ace.ShellBase, System.Single, System.Boolean, app.ItemDef.ID, System.Boolean)"), cancelExecution, nil)
+        sdk.hook(type_HunterExtendBase:get_method("successItem(app.ItemDef.ID, System.Int32, System.Boolean, ace.ShellBase, System.Single, System.Boolean, app.ItemDef.ID, System.Boolean)"), stopExecution("type_HunterExtendBase_successItem"), nil)
     end
 
     --= Cancel events =================================================================--
@@ -1006,9 +987,9 @@ if config.Enable == true then
 
     -- Stamp
     if type_ChatManager then
-        sdk.hook(type_ChatManager:get_method("sendStamp"), cancelExecution, nil)
-        sdk.hook(type_ChatManager:get_method("sendFreeText"), cancelExecution, nil)
-        sdk.hook(type_ChatManager:get_method("sendManualText"), cancelExecution, nil)
+        sdk.hook(type_ChatManager:get_method("sendStamp"), stopExecution("type_ChatManager_sendStamp"), nil)
+        sdk.hook(type_ChatManager:get_method("sendFreeText"), stopExecution("type_ChatManager_sendFreeText"), nil)
+        sdk.hook(type_ChatManager:get_method("sendManualText"), stopExecution("type_ChatManager_sendManualText"), nil)
     end
 
     -- Slinger reload
@@ -1053,22 +1034,22 @@ if config.Enable == true then
 
     -- Member list
     if type_GUI040000 then
-        sdk.hook(type_GUI040000:get_method("onOpenApp"), cancelTriggerForce, function(retval) debug("cancelled by 40000") end)
+        sdk.hook(type_GUI040000:get_method("onOpenApp"), cancelTriggerForce, function(retval) debug("STOP - type_GUI040000") end)
     end
 
     -- Invitation list
     if type_GUI040002 then
-        sdk.hook(type_GUI040002:get_method("onOpen"), cancelTriggerForce, function(retval) debug("cancelled by 40002") end)
+        sdk.hook(type_GUI040002:get_method("onOpen"), cancelTriggerForce, function(retval) debug("STOP - type_GUI040002") end)
     end
 
     -- Map ping
     if type_cGUI060000 then
-        sdk.hook(type_cGUI060000:get_method("playSignCore"), cancelTriggerForce, function(retval) debug("cancelled by 06000") end)
+        sdk.hook(type_cGUI060000:get_method("playSignCore"), cancelTriggerForce, function(retval) debug("STOP - type_cGUI060000") end)
     end
 
     -- Chat log
     if type_ChatLogCommunication then
-        sdk.hook(type_ChatLogCommunication:get_method("start(app.GUIFlowChatLogCommunication.BOOT, ace.IGUIFlowHandle)"), cancelTriggerForce, function(retval) debug("cancelled by chatlog") end)
+        sdk.hook(type_ChatLogCommunication:get_method("start(app.GUIFlowChatLogCommunication.BOOT, ace.IGUIFlowHandle)"), cancelTriggerForce, function(retval) debug("STOP - type_ChatLogCommunication") end)
     end
 
     --= Misc utility ==================================================================--
