@@ -5,6 +5,8 @@
 
 local VERSION = "2.7"
 local CONFIG_PATH = "radial_queue.json"
+local SOURCE_MKB = 101
+local SOURCE_RADIAL = 55
 
 --= Configuration =============================================================================--
 local config = {
@@ -32,7 +34,8 @@ local config = {
     IndicatorShowInMenu                 = true,
     IndicatorMinimumPulseAlpha          = 0.5,
     IndicatorMaxPulseAlpha              = 1.0,
-    debug_flag                          = true
+    debug_flag                          = true,
+    debug_forceMsg                      = false
 }
 
 local function save_config()
@@ -229,6 +232,11 @@ re.on_draw_ui(function()
             if imgui.is_item_hovered() then
                 imgui.set_tooltip("Prints debug information to the REFramework debug console")
             end
+            if config.debug_flag then
+                if imgui.checkbox("Force all debug messages ", config.debug_forceMsg) then
+                    config.debug_forceMsg = not config.debug_forceMsg
+                end
+            end
         end 
         imgui.tree_pop()
     end
@@ -305,21 +313,30 @@ local loadedTable                   = nil
 local sourceInput                   = nil
 local shouldThrottle                = true    
 local last_debug_times              = {}
+local last_debug_messages           = {}
 
 
 
 --= Utility functions =======================================================================--
 local function debug(msg, override)
     if not config.debug_flag then return end
-    if not executing and not override then return end
+    if override == false and config.debug_forceMsg == false then 
+        if not executing then return end
+    end
+    
 
     local msg_key = tostring(msg)
     local current_time = os.time()
 
     if shouldThrottle then
-        if last_debug_times[msg_key] == current_time then
+        local last_msg = last_debug_messages[msg_key]
+        local last_time = last_debug_times[msg_key]
+
+        if last_msg == msg_key and last_time == current_time then
             return
         end
+
+        last_debug_messages[msg_key] = msg_key
         last_debug_times[msg_key] = current_time
     end
 
@@ -358,9 +375,13 @@ local function setInputSource(instance)
     if instance == nil then
         return
     end
-      --ID 100 for M+KB, 55 for Radial
+      --ID 100, 101(TU2) for M+KB, 55 for Radial
     sourceInput = instance:get_field("_PartsOwnerAccessor"):get_field("_Owner"):get_ID()
-  
+    if sourceInput ~= SOURCE_MKB and sourceInput ~= SOURCE_RADIAL then
+        debug("setInputSource - Unknown sourceInput: " .. tostring(sourceInput))
+        return
+    end
+
     if sourceInput == nil then
         return
     end
@@ -397,7 +418,7 @@ local function stopExecution(msg)
     if msg then 
         debug("STOP - " .. msg)
     end
-
+    
     itemSuccess = true
     resetTime = nil
     sourceInput = nil 
@@ -412,8 +433,6 @@ local function stopExecution(msg)
     shortcutPreviousItemId = nil
     cancelCountDodge = 0
     executing = false
-
-    
 end
 
 local function cancelOnShortcutItemId(_itemId)
@@ -461,7 +480,6 @@ local function checkIsShortcutSelected(args)
         
         if cancelOnShortcutItemId(shortcutItemId) == true then 
             if config.IgnoreDisabledShortcut == false then
-                
                 stopExecution("Cancel by ID: " .. tostring(shortcutItemId))
             end
         end
@@ -469,7 +487,7 @@ local function checkIsShortcutSelected(args)
         if shortcutPreviousItemId == nil then
             shortcutPreviousItemId = shortcutItemId
         elseif shortcutPreviousItemId ~= shortcutItemId then
-            if sourceInput == 55 then
+            if sourceInput == SOURCE_RADIAL then
                 stopExecution("ShortcutItemId changed")
             end
             shortcutPreviousItemId = shortcutItemId
@@ -585,7 +603,6 @@ end
 
 --= Core functions ========================================================================--
 local function saveItem(args)
-    
     if executing == false then
         executing = true
         debug("START - ItemID: " .. tostring(shortcutItemId))
@@ -595,10 +612,11 @@ local function saveItem(args)
     end
 
     instance = sdk.to_managed_object(args[2])
-    setInputSource(instance)
+    setInputSource(instance
 
-    if sourceInput == 100 then
+    if sourceInput == SOURCE_MKB then
         GUI020600_itemIndex_current = getUserdataToInt(args[3])
+        debug("itemIndex - " .. GUI020600_itemIndex_current)
         shortcutPreviousItemId = nil
     end
 
@@ -636,18 +654,18 @@ local function checkShortcutType(args)
 end
 
 local function retryShortcut(args)
-    if instance == nil then
+    if instance == nil or itemSuccess == true then
         return
     end
 
-    if sourceInput == 55 then
+    if sourceInput == SOURCE_RADIAL then
         instance:call("updateShortcut()")
     end
     if instance_activeShortcut ~= nil then
         instance_activeShortcut:call("update()")
     end
 
-    if sourceInput == 55 and shortcutIsEnabled == false then
+    if sourceInput == SOURCE_RADIAL and shortcutIsEnabled == false then
         if config.IgnoreDisabledShortcut == false then
             stopExecution("Shortcut is disabled")
         end
@@ -678,9 +696,9 @@ local function retryShortcut(args)
                 debug("RETRY - ItemId: " .. tostring(shortcutItemId))
             end    
 
-            if sourceInput == 100 and GUI020600_itemIndex_current ~= nil then
+            if sourceInput == SOURCE_MKB and GUI020600_itemIndex_current ~= nil then
                 instance:call('execute(System.Int32)', GUI020600_itemIndex_current)
-            elseif sourceInput == 55 then
+            elseif sourceInput == SOURCE_RADIAL then
                 instance:call('useActiveItem(System.Boolean)', nil)
             else
                 return
@@ -909,14 +927,14 @@ if config.Enable == true then
     --= Main loop =========================================================================--
     -- Radial menu
     if type_GUI020008 then
-        sdk.hook(type_GUI020008:get_method('onOpenApp'), stopExecution("type_GUI020008_onOpenApp"), nil)
+        sdk.hook(type_GUI020008:get_method('onOpenApp'), function(args) stopExecution('type_GUI020008_onOpenApp') end, nil)
         sdk.hook(type_GUI020008:get_method("useActiveItem"), saveItem, nil)
     end
 
     -- M+KB
     if type_GUI020600 then
         sdk.hook(type_GUI020600:get_method("execute"), saveItem, nil)
-        sdk.hook(type_GUI020600:get_method("onHudClose"), stopExecution("type_GUI020600_onHudClose"), nil)
+        sdk.hook(type_GUI020600:get_method("onHudClose"), function(args) stopExecution("type_GUI020600_onHudClose") end, nil)
     end
 
     --Check crafting itemAmount for logic
@@ -937,9 +955,9 @@ if config.Enable == true then
 
     -- Item used successfully
     if type_HunterExtendBase then
-        sdk.hook(type_HunterExtendBase:get_method("successItem(app.ItemDef.ID, System.Int32, System.Boolean, ace.ShellBase, System.Single, System.Boolean, app.ItemDef.ID, System.Boolean)"), stopExecution("type_HunterExtendBase_successItem"), nil)
+        sdk.hook(type_HunterExtendBase:get_method("successItem(app.ItemDef.ID, System.Int32, System.Boolean, ace.ShellBase, System.Single, System.Boolean, app.ItemDef.ID, System.Boolean)"), function(args) stopExecution("type_HunterExtendBase_successItem") end, nil)
     end
-
+    
     --= Cancel events =================================================================--
     if type_Hit then
         sdk.hook(type_Hit:get_method("callHitReturnEvent(System.Delegate[], app.HitInfo)"), cancelTriggerReceivedHit, nil)
@@ -987,9 +1005,9 @@ if config.Enable == true then
 
     -- Stamp
     if type_ChatManager then
-        sdk.hook(type_ChatManager:get_method("sendStamp"), stopExecution("type_ChatManager_sendStamp"), nil)
-        sdk.hook(type_ChatManager:get_method("sendFreeText"), stopExecution("type_ChatManager_sendFreeText"), nil)
-        sdk.hook(type_ChatManager:get_method("sendManualText"), stopExecution("type_ChatManager_sendManualText"), nil)
+        sdk.hook(type_ChatManager:get_method("sendStamp"), function(args) stopExecution("type_ChatManager_sendStamp") end, nil)
+        sdk.hook(type_ChatManager:get_method("sendFreeText"), function(args) stopExecution("type_ChatManager_sendFreeText") end, nil)
+        sdk.hook(type_ChatManager:get_method("sendManualText"), function(args) stopExecution("type_ChatManager_sendManualText") end, nil)
     end
 
     -- Slinger reload
